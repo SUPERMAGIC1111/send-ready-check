@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Send-ready Check</title>
+<style>
+:root{--bg:#fffdf6;--ink:#1d1a16;--mute:#6c665b;--card:#fff;--line:rgba(30,25,10,.14);--y:#ffd21f;--red:#d6403a;--amb:#c9830a;--grn:#1f9d57}
+@media (prefers-color-scheme:dark){:root{--bg:#14120e;--ink:#f6f1e6;--mute:#aaa397;--card:#1e1b16;--line:rgba(255,255,255,.16);--red:#ff7a72;--amb:#ffc04d;--grn:#4cd68a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,"Segoe UI",sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 50px}
+main{max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font:800 clamp(1.8rem,6vw,2.4rem)/1.05 system-ui;letter-spacing:-.03em;margin:8px 0 0}
+.sub{color:var(--mute);margin:0}
+textarea{width:100%;min-height:150px;font:13px/1.4 ui-monospace,Menlo,monospace;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:12px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-weight:700;border-radius:999px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);padding:11px 18px;cursor:pointer}
+button.go{background:var(--y);border-color:var(--y);color:#1d1a16}
+.score{display:flex;align-items:center;gap:14px;background:var(--card);border:1.5px solid var(--line);border-radius:22px;padding:14px 16px}
+.score b{font:800 2.2rem/1 system-ui}
+.item{display:flex;gap:12px;background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:12px 14px}
+.dot{width:14px;height:14px;border-radius:50%;margin-top:5px;flex:none}
+.item h3{margin:0;font-size:1rem}.item p{margin:2px 0 0;color:var(--mute);font-size:.92rem}
+.item.high .dot{background:var(--red)}.item.mid .dot{background:var(--amb)}.item.ok .dot{background:var(--grn)}
+.hint{font-size:.85rem;color:var(--mute)}
+small{color:var(--mute)}
+</style></head><body><main>
+<h1>Send-ready Check</h1>
+<p class="sub">Fügt den HTML-Code deiner Seite ein. Du bekommst eine kurze Liste: Das musst du ändern, bevor du die Seite an Kunden schickst.</p>
+<label for="src" class="hint">HTML der Seite (im Browser: Rechtsklick, "Seitenquelltext anzeigen", alles kopieren)</label>
+<textarea id="src" placeholder="<html>…</html>"></textarea>
+<div class="row"><button class="go" id="run">Seite prüfen</button><button id="demo">Beispiel laden</button></div>
+<div id="out" aria-live="polite"></div>
+<p class="hint">Alles läuft in deinem Browser. Der Code wird nicht gesendet oder gespeichert. Keine KI, kein Konto. Prüft nur die Technik und die Basics, keine Rechtsberatung. Früher Prototyp.</p>
+</main>
+<script src="checker.js"></script>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var SAMPLE='<html><head><title>Hi</title></head><body><h1>Willkommen</h1><h1>Unsere Leistungen</h1><p>Lorem ipsum dolor sit amet</p><img src="a.jpg"><img src="b.jpg" alt=""><a href="/mehr">hier klicken</a><a href="/kontakt">Mehr</a><footer>© 2026 Beispiel GmbH</footer></body></html>';
+  $('demo').addEventListener('click',function(){$('src').value=SAMPLE;run()});
+  $('run').addEventListener('click',run);
+  function run(){
+    var html=$('src').value.trim(),out=$('out');out.textContent='';
+    if(!html){out.textContent='Bitte zuerst HTML einfügen.';return}
+    var r=SendReady.check(html),sc=document.createElement('div');sc.className='score';
+    var b=document.createElement('b');b.textContent=r.score+' / 100';sc.appendChild(b);
+    var t=document.createElement('div');t.textContent=r.score>=100?'Nach diesen Prüfungen bereit zum Senden. Schau die Seite trotzdem einmal auf dem Handy an.':r.score>=85?'Fast fertig. Nur noch Kleinigkeiten.':r.score>=60?'Noch ein paar Dinge, bevor du sendest.':'Noch nicht bereit zum Senden.';sc.appendChild(t);out.appendChild(sc);
+    r.items.forEach(function(it){var d=document.createElement('div');d.className='item '+it.level;var dot=document.createElement('span');dot.className='dot';d.appendChild(dot);var w=document.createElement('div');var h=document.createElement('h3');h.textContent=it.title;w.appendChild(h);if(it.fix){var p=document.createElement('p');p.textContent=it.fix;w.appendChild(p)}d.appendChild(w);out.appendChild(d)});
+  }
+})();
+</script></body></html>

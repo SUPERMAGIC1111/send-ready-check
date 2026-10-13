@@ -1,0 +1,59 @@
+/* _page.css — chrome for the demo page only. The reusable parts are in ui-kit.css. */
+html,body{margin:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:var(--body);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  padding-block:0 64px;padding-inline:16px;
+  overflow-x:hidden;
+}
+/* Colour behind the glass — three slow blobs, so the blur has something to chew on. */
+body::before{
+  content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(38vmax 38vmax at 18% 22%,var(--grape),transparent 62%),
+    radial-gradient(32vmax 32vmax at 82% 30%,var(--pop),transparent 60%),
+    radial-gradient(42vmax 42vmax at 50% 88%,var(--bg-deep),transparent 64%);
+  opacity:.72;filter:blur(18px);
+  animation:drift 26s ease-in-out infinite alternate;
+}
+@keyframes drift{
+  from{transform:translate3d(-3%,-2%,0) scale(1)}
+  to{transform:translate3d(4%,3%,0) scale(1.12)}
+}
+@media (prefers-reduced-motion:reduce){body::before{animation:none}}
+
+.page{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:52px}
+
+.hero{display:flex;flex-direction:column;gap:16px;padding-top:44px}
+.eyebrow{
+  margin:0;font-family:var(--display);font-size:.6rem;letter-spacing:.16em;
+  color:var(--on-glass);opacity:.72;
+}
+.hero h1{
+  margin:0;font-family:var(--display);
+  font-size:clamp(1.65rem,7vw,3.1rem);line-height:1.18;letter-spacing:.01em;
+  color:var(--on-glass);text-wrap:balance;
+}
+.lede{margin:0;max-width:56ch;color:var(--on-glass);opacity:.85}
+.hero__buttons{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+
+.section{display:flex;flex-direction:column;gap:12px}
+.section__h{
+  margin:0;font-family:var(--display);font-size:.78rem;letter-spacing:.12em;
+  color:var(--on-glass);opacity:.8;
+}
+.section__note{margin:0;max-width:62ch;color:var(--on-glass);opacity:.78;font-size:.95rem}
+code{
+  font-family:var(--body);font-size:.88em;
+  background:rgba(255,255,255,.2);border-radius:5px;padding:.1em .35em;
+}
+.tabs__panel code{background:var(--paper-dim);color:var(--ink)}
+
+.glass-demo{display:flex;min-height:150px;align-items:center}
+.glass-card{--glass-radius:24px;padding:22px;width:100%}
+.glass-card h3{margin:0 0 8px;font-family:var(--display);font-size:.84rem;letter-spacing:.04em}
+.glass-card p{margin:0;max-width:56ch;opacity:.86}
+
+.foot{border-top:1px solid var(--glass-line-dim);padding-top:18px}
+.foot p{margin:0;font-size:.85rem;color:var(--on-glass);opacity:.72;max-width:62ch}

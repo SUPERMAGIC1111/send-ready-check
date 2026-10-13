@@ -1,0 +1,92 @@
+<div class="page">
+  <nav class="nav glass" aria-label="Hauptnavigation">
+    <span class="nav__mark">SEND-READY</span>
+    <ul class="nav__links">
+      <li><a href="#check">PRÜFEN</a></li>
+      <li><a href="#kit">KIT</a></li>
+      <li><a href="#impressum">IMPRESSUM</a></li>
+    </ul>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow">DREI BAUSTEINE · NEU GESCHRIEBEN</p>
+    <h1>Some frames<br>may be locked.</h1>
+    <p class="lede">Federnde Tabs, Glas-Navigation und ein elastischer Button. Eigener Code, keine fremden Dateien — nimm, was du brauchst.</p>
+    <div class="hero__buttons">
+      <button class="pulse pulse--pop pulse--beacon" type="button">SEITE PRÜFEN</button>
+      <button class="pulse pulse--ghost" type="button">BEISPIEL LADEN</button>
+    </div>
+  </header>
+
+  <section class="section" id="kit" aria-labelledby="kit-h">
+    <h2 class="section__h" id="kit-h">01 — Federnde Tabs</h2>
+    <p class="section__note">Die Pille schießt über das Ziel hinaus und federt zurück. Die Höhe des Panels wandert mit. Pfeiltasten, Pos1 und Ende funktionieren.</p>
+
+    <div class="tabs">
+      <div class="tabs__list" role="tablist" aria-label="Was der Check prüft">
+        <span class="tabs__pill" aria-hidden="true"></span>
+        <button class="tabs__tab" type="button" aria-selected="true" aria-controls="p-technik" id="t-technik">TECHNIK</button>
+        <button class="tabs__tab" type="button" aria-selected="false" aria-controls="p-inhalt" id="t-inhalt">INHALT</button>
+        <button class="tabs__tab" type="button" aria-selected="false" aria-controls="p-recht" id="t-recht">RECHT</button>
+        <button class="tabs__tab" type="button" aria-selected="false" aria-controls="p-grenzen" id="t-grenzen">GRENZEN</button>
+      </div>
+      <div class="tabs__stage">
+        <div class="tabs__panel" role="tabpanel" id="p-technik" aria-labelledby="t-technik" tabindex="0">
+          <h3>Was technisch geprüft wird</h3>
+          <ul>
+            <li><b>Seitentitel</b> — vorhanden, 30 bis 60 Zeichen.</li>
+            <li><b>Meta-Beschreibung</b> — ein bis zwei Sätze unter dem Titel bei Google.</li>
+            <li><b>Genau eine H1</b> — mehr als eine kostet Punkte.</li>
+            <li><b>Viewport</b> — ohne sie sieht die Seite auf dem Handy winzig aus.</li>
+            <li><b>Sprache</b> — <code>lang="de"</code> im html-Tag.</li>
+          </ul>
+        </div>
+        <div class="tabs__panel" role="tabpanel" id="p-inhalt" aria-labelledby="t-inhalt" tabindex="0" hidden>
+          <h3>Was am Inhalt auffällt</h3>
+          <ul>
+            <li><b>Alt-Texte</b> — jedes Bild in einem Satz beschrieben. Reine Deko: <code>alt=""</code>.</li>
+            <li><b>Linktexte</b> — „hier klicken“ und „mehr“ werden angestrichen.</li>
+            <li><b>Platzhalter</b> — Lorem ipsum, „Text hier“, „Coming soon“.</li>
+            <li><b>Nächster Schritt</b> — ein Button, der sagt, was der Besucher tun soll.</li>
+          </ul>
+        </div>
+        <div class="tabs__panel" role="tabpanel" id="p-recht" aria-labelledby="t-recht" tabindex="0" hidden>
+          <h3>Impressum und Datenschutz</h3>
+          <p>Der Check sucht nur nach den Links. Ob der Inhalt reicht, entscheidet er nicht — das ist keine Rechtsberatung.</p>
+          <p>Fehlt einer der beiden Links, gilt das als schwerer Punkt und zieht die Bewertung deutlich nach unten.</p>
+        </div>
+        <div class="tabs__panel" role="tabpanel" id="p-grenzen" aria-labelledby="t-grenzen" tabindex="0" hidden>
+          <h3>Was der Check nicht kann</h3>
+          <p>Er liest den HTML-Code, den du einfügst — mehr nicht. Er lädt keine Seite nach, führt kein JavaScript aus und sieht keine Bilder.</p>
+          <p>Alles läuft im Browser. Der Code wird nicht gesendet und nicht gespeichert. Kein Konto, keine KI, keine Cookies.</p>
+          <p>Schau die Seite danach trotzdem einmal selbst auf dem Handy an.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="glass-h">
+    <h2 class="section__h" id="glass-h">02 — Glas</h2>
+    <p class="section__note">Die Leiste oben ist es schon. Scroll, und die Tönung wird dichter, sobald etwas darunter liegt. Dasselbe <code>.glass</code> funktioniert auf jeder Fläche:</p>
+    <div class="glass-demo">
+      <div class="glass glass-card">
+        <h3>Nur eine Klasse</h3>
+        <p>Unschärfe, Sättigung, ein Lichtkante oben und ein Korn gegen Streifenbildung. Ohne <code>backdrop-filter</code> fällt es auf eine deckende Fläche zurück.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="btn-h">
+    <h2 class="section__h" id="btn-h">03 — Elastischer Button</h2>
+    <p class="section__note">Drücken staucht schnell, Loslassen federt über die Ruhegröße hinaus. Beim Klick läuft ein Ring nach außen.</p>
+    <div class="hero__buttons">
+      <button class="pulse" type="button">STANDARD</button>
+      <button class="pulse pulse--pop" type="button">AKZENT</button>
+      <button class="pulse pulse--ghost" type="button">GHOST</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Alle drei Bausteine stehen in <code>ui-kit/ui-kit.css</code> und <code>ui-kit/ui-kit.js</code>. Bewegung respektiert <code>prefers-reduced-motion</code>.</p>
+  </footer>
+</div>

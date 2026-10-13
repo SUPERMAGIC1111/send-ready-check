@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Send-ready UI-Kit</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="ui-kit.css"><style>
+/* _page.css — chrome for the demo page only. The reusable parts are in ui-kit.css. */
+html,body{margin:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:var(--body);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  padding-block:0 64px;padding-inline:16px;
+  overflow-x:hidden;
+}
+/* Colour behind the glass — three slow blobs, so the blur has something to chew on. */
+body::before{
+  content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(38vmax 38vmax at 18% 22%,var(--grape),transparent 62%),
+    radial-gradient(32vmax 32vmax at 82% 30%,var(--pop),transparent 60%),
+    radial-gradient(42vmax 42vmax at 50% 88%,var(--bg-deep),transparent 64%);
+  opacity:.72;filter:blur(18px);
+  animation:drift 26s ease-in-out infinite alternate;
+}
+@keyframes drift{
+  from{transform:translate3d(-3%,-2%,0) scale(1)}
+  to{transform:translate3d(4%,3%,0) scale(1.12)}
+}
+@media (prefers-reduced-motion:reduce){body::before{animation:none}}
+
+.page{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:52px}
+
+.hero{display:flex;flex-direction:column;gap:16px;padding-top:44px}
+.eyebrow{
+  margin:0;font-family:var(--display);font-size:.6rem;letter-spacing:.16em;
+  color:var(--on-glass);opacity:.72;
+}
+.hero h1{
+  margin:0;font-family:var(--display);
+  font-size:clamp(1.65rem,7vw,3.1rem);line-height:1.18;letter-spacing:.01em;
+  color:var(--on-glass);text-wrap:balance;
+}
+.lede{margin:0;max-width:56ch;color:var(--on-glass);opacity:.85}
+.hero__buttons{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+
+.section{display:flex;flex-direction:column;gap:12px}
+.section__h{
+  margin:0;font-family:var(--display);font-size:.78rem;letter-spacing:.12em;
+  color:var(--on-glass);opacity:.8;
+}
+.section__note{margin:0;max-width:62ch;color:var(--on-glass);opacity:.78;font-size:.95rem}
+code{
+  font-family:var(--body);font-size:.88em;
+  background:rgba(255,255,255,.2);border-radius:5px;padding:.1em .35em;
+}
+.tabs__panel code{background:var(--paper-dim);color:var(--ink)}
+
+.glass-demo{display:flex;min-height:150px;align-items:center}
+.glass-card{--glass-radius:24px;padding:22px;width:100%}
+.glass-card h3{margin:0 0 8px;font-family:var(--display);font-size:.84rem;letter-spacing:.04em}
+.glass-card p{margin:0;max-width:56ch;opacity:.86}
+
+.foot{border-top:1px solid var(--glass-line-dim);padding-top:18px}
+.foot p{margin:0;font-size:.85rem;color:var(--on-glass);opacity:.72;max-width:62ch}
+</style></head><body>
+<div class="page">
+  <nav class="nav glass" aria-label="Hauptnavigation">
+    <span class="nav__mark">SEND-READY</span>
+    <ul class="nav__links">
+      <li><a href="#check">PRÜFEN</a></li>
+      <li><a href="#kit">KIT</a></li>
+      <li><a href="#impressum">IMPRESSUM</a></li>
+    </ul>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow">DREI BAUSTEINE · NEU GESCHRIEBEN</p>
+    <h1>Some frames<br>may be locked.</h1>
+    <p class="lede">Federnde Tabs, Glas-Navigation und ein elastischer Button. Eigener Code, keine fremden Dateien — nimm, was du brauchst.</p>
+    <div class="hero__buttons">
+      <button class="pulse pulse--pop pulse--beacon" type="button">SEITE PRÜFEN</button>
+      <button class="pulse pulse--ghost" type="button">BEISPIEL LADEN</button>
+    </div>
+  </header>
+
+  <section class="section" id="kit" aria-labelledby="kit-h">
+    <h2 class="section__h" id="kit-h">01 — Federnde Tabs</h2>
+    <p class="section__note">Die Pille schießt über das Ziel hinaus und federt zurück. Die Höhe des Panels wandert mit. Pfeiltasten, Pos1 und Ende funktionieren.</p>
+
+    <div class="tabs">
+      <div class="tabs__list" role="tablist" aria-label="Was der Check prüft">
+        <span class="tabs__pill" aria-hidden="true"></span>
+        <button class="tabs__tab" type="button" aria-selected="true" aria-controls="p-technik" id="t-technik">TECHNIK</button>
+        <button class="tabs__tab" type="button" aria-selected="false" aria-controls="p-inhalt" id="t-inhalt">INHALT</button>
+        <button class="tabs__tab" type="button" aria-selected="false" aria-controls="p-recht" id="t-recht">RECHT</button>
+        <button class="tabs__tab" type="button" aria-selected="false" aria-controls="p-grenzen" id="t-grenzen">GRENZEN</button>
+      </div>
+      <div class="tabs__stage">
+        <div class="tabs__panel" role="tabpanel" id="p-technik" aria-labelledby="t-technik" tabindex="0">
+          <h3>Was technisch geprüft wird</h3>
+          <ul>
+            <li><b>Seitentitel</b> — vorhanden, 30 bis 60 Zeichen.</li>
+            <li><b>Meta-Beschreibung</b> — ein bis zwei Sätze unter dem Titel bei Google.</li>
+            <li><b>Genau eine H1</b> — mehr als eine kostet Punkte.</li>
+            <li><b>Viewport</b> — ohne sie sieht die Seite auf dem Handy winzig aus.</li>
+            <li><b>Sprache</b> — <code>lang="de"</code> im html-Tag.</li>
+          </ul>
+        </div>
+        <div class="tabs__panel" role="tabpanel" id="p-inhalt" aria-labelledby="t-inhalt" tabindex="0" hidden>
+          <h3>Was am Inhalt auffällt</h3>
+          <ul>
+            <li><b>Alt-Texte</b> — jedes Bild in einem Satz beschrieben. Reine Deko: <code>alt=""</code>.</li>
+            <li><b>Linktexte</b> — „hier klicken“ und „mehr“ werden angestrichen.</li>
+            <li><b>Platzhalter</b> — Lorem ipsum, „Text hier“, „Coming soon“.</li>
+            <li><b>Nächster Schritt</b> — ein Button, der sagt, was der Besucher tun soll.</li>
+          </ul>
+        </div>
+        <div class="tabs__panel" role="tabpanel" id="p-recht" aria-labelledby="t-recht" tabindex="0" hidden>
+          <h3>Impressum und Datenschutz</h3>
+          <p>Der Check sucht nur nach den Links. Ob der Inhalt reicht, entscheidet er nicht — das ist keine Rechtsberatung.</p>
+          <p>Fehlt einer der beiden Links, gilt das als schwerer Punkt und zieht die Bewertung deutlich nach unten.</p>
+        </div>
+        <div class="tabs__panel" role="tabpanel" id="p-grenzen" aria-labelledby="t-grenzen" tabindex="0" hidden>
+          <h3>Was der Check nicht kann</h3>
+          <p>Er liest den HTML-Code, den du einfügst — mehr nicht. Er lädt keine Seite nach, führt kein JavaScript aus und sieht keine Bilder.</p>
+          <p>Alles läuft im Browser. Der Code wird nicht gesendet und nicht gespeichert. Kein Konto, keine KI, keine Cookies.</p>
+          <p>Schau die Seite danach trotzdem einmal selbst auf dem Handy an.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="glass-h">
+    <h2 class="section__h" id="glass-h">02 — Glas</h2>
+    <p class="section__note">Die Leiste oben ist es schon. Scroll, und die Tönung wird dichter, sobald etwas darunter liegt. Dasselbe <code>.glass</code> funktioniert auf jeder Fläche:</p>
+    <div class="glass-demo">
+      <div class="glass glass-card">
+        <h3>Nur eine Klasse</h3>
+        <p>Unschärfe, Sättigung, ein Lichtkante oben und ein Korn gegen Streifenbildung. Ohne <code>backdrop-filter</code> fällt es auf eine deckende Fläche zurück.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="btn-h">
+    <h2 class="section__h" id="btn-h">03 — Elastischer Button</h2>
+    <p class="section__note">Drücken staucht schnell, Loslassen federt über die Ruhegröße hinaus. Beim Klick läuft ein Ring nach außen.</p>
+    <div class="hero__buttons">
+      <button class="pulse" type="button">STANDARD</button>
+      <button class="pulse pulse--pop" type="button">AKZENT</button>
+      <button class="pulse pulse--ghost" type="button">GHOST</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Alle drei Bausteine stehen in <code>ui-kit/ui-kit.css</code> und <code>ui-kit/ui-kit.js</code>. Bewegung respektiert <code>prefers-reduced-motion</code>.</p>
+  </footer>
+</div>
+<script src="ui-kit.js"></script><script>UIKit.mount()</script></body></html>

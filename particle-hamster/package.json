@@ -1,0 +1,21 @@
+{
+  "name": "particle-hamster",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A 3D particle hamster (Three.js points) that runs, rotates on drag, and settles to its right-facing side pose.",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "check": "node tools/check.mjs",
+    "render": "node tools/render-preview.mjs"
+  },
+  "dependencies": {
+    "three": "0.185.1",
+    "motion": "13.5.1"
+  },
+  "devDependencies": {
+    "vite": "7.1.12"
+  }
+}

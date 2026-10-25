@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Particle Hamster</title>
+    <style>
+      :root { color-scheme: dark; --fg: #f3e6d6; --dim: rgba(243, 230, 214, 0.45); --chip: rgba(255, 255, 255, 0.06); --chip-on: rgba(255, 170, 80, 0.22); }
+      html, body { margin: 0; height: 100%; background: #000; color: var(--fg); overflow: hidden; }
+      body { font: 12px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      #stage { position: fixed; inset: 0; touch-action: none; cursor: grab; }
+      #stage:active { cursor: grabbing; }
+      #status { position: fixed; inset: 0; display: grid; place-items: center; color: var(--dim); pointer-events: none; letter-spacing: 0.08em; }
+      #ui { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: calc(100vw - 32px); }
+      #ui button { all: unset; cursor: pointer; padding: 6px 10px; border-radius: 999px; background: var(--chip); color: var(--dim); transition: background 0.2s, color 0.2s; }
+      #ui button:hover, #ui button:focus-visible { color: var(--fg); outline: 1px solid rgba(255, 255, 255, 0.2); }
+      #ui button[aria-pressed="true"] { background: var(--chip-on); color: var(--fg); }
+      #ui .sep { width: 1px; background: rgba(255, 255, 255, 0.12); margin: 4px 2px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage" aria-label="3D particle hamster. Drag to rotate."></canvas>
+    <div id="status">assembling particles…</div>
+    <nav id="ui" aria-label="View">
+      <button data-view="side" aria-pressed="true" title="1">Side</button>
+      <button data-view="three-quarter" title="2">45°</button>
+      <button data-view="front" title="3">Front</button>
+      <button data-view="opposite-side" title="4">Opposite</button>
+      <button data-view="back" title="5">Back</button>
+      <button data-view="profile" title="6">Profile</button>
+      <span class="sep"></span>
+      <button id="run" aria-pressed="true" title="Space">Run</button>
+    </nav>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

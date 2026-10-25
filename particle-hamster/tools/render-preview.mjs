@@ -85,7 +85,7 @@ function renderDots({ yaw, pitch = CAMERA.pitch, time = 0, run = 1, size = 520, 
           const d = Math.hypot(x + 0.5 - pr.sx, y + 0.5 - pr.sy) / r;
           if (d > 1) continue;
           const t = Math.min(1, Math.max(0, (0.72 - d) / 0.42));
-          const a = L.alpha[i] * (t * t * (3 - 2 * t) + Math.exp(-d * d * 5) * 0.45);
+          const a = L.alpha[i] * (t * t * (3 - 2 * t) + Math.exp(-d * d * 5) * 0.6);
           const k = (y * W + x) * 3;
           col[k] += rgb[0] * a; col[k + 1] += rgb[1] * a; col[k + 2] += rgb[2] * a;
         }
@@ -207,7 +207,7 @@ if (which.includes('run')) {
   save('sheet-run-cycle', sheet(ims, 3));
 }
 if (which.includes('detail')) {
-  save('detail-face', renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.6, center: [0.62, 0.38] }));
+  save('detail-face', renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.4, center: [0.75, 0.2] }));
   save('detail-body', renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.6, center: [-0.45, -0.35] }));
   save('detail-ear-paw', renderDots({ yaw: VIEWS['three-quarter'], time: 0.05, zoom: 1.7, center: [0.35, 0.1] }));
 }

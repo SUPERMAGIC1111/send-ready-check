@@ -44,7 +44,7 @@ export function shadeDot(base, n, rest, kind, flag, seed, t, isFur, depth = CAME
     if (flag > 0) return [1.4, 1.4, 1.4];
     return b.map((c) => c * (0.85 + 0.4 * diff) * fade);
   }
-  return b.map((c) => (c * (0.75 + 0.85 * diff) * tw + rim * 0.3 * (0.6 * c + 0.4)) * fade + flag * 0.4);
+  return b.map((c) => (c * (0.85 + 0.85 * diff) * tw + rim * 0.3 * (0.6 * c + 0.4)) * fade + flag * 0.4);
 }
 
 /** silhouette dots are drawn a little larger (and brighter via the rim term) */

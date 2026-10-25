@@ -72,13 +72,13 @@ const PARENT = [0, 0, 1, 1, 0, 0, 0, 0, 0];
 const PIVOT = [
   [-0.1, -0.15, 0],
   [0.36, 0.06, 0],
-  [0.3, 0.76, 0.34],
-  [0.3, 0.76, -0.34],
-  [0.62, -0.08, 0.38],
-  [0.62, -0.08, -0.38],
-  [-0.32, -0.4, 0.44],
-  [-0.32, -0.4, -0.44],
-  [-0.9, -0.18, 0],
+  [0.28, 0.78, 0.38],
+  [0.28, 0.78, -0.38],
+  [0.6, -0.12, 0.36],
+  [0.6, -0.12, -0.36],
+  [-0.3, -0.45, 0.46],
+  [-0.3, -0.45, -0.46],
+  [-0.95, -0.15, 0],
 ];
 
 // ---------------------------------------------------------------- anatomy (SDF primitives)
@@ -97,14 +97,14 @@ function earBasis(side) {
 }
 
 // head centre; most face features are placed relative to it
-const HC = [0.5, 0.36, 0];
-const EYE_R = 0.2;
+const HC = [0.52, 0.36, 0];
+const EYE_R = 0.165;
 const EYES = [1, -1].map((s) => {
   // eyeballs sit ~42deg off the forward axis, 12deg up: the near eye reads fully in the
   // hero side view, and both eyes still face the viewer in the front view
   const dir = norm([0.727, 0.208, 0.655 * s]);
   return {
-    c: [HC[0] + dir[0] * 0.53, HC[1] + dir[1] * 0.53, dir[2] * 0.53],
+    c: [HC[0] + dir[0] * 0.6, HC[1] + dir[1] * 0.6, dir[2] * 0.6],
     gaze: dir,
     // pupils look forward (running toward the right)
     look: norm([0.92, 0.17, 0.38 * s]),
@@ -116,25 +116,28 @@ const PRIMS = [];
 for (const s of [1, -1]) {
   const N = s > 0 ? 'N' : 'F';
   PRIMS.push(
-    ell('cheek' + N, B.head, [0.79, 0.08, 0.31 * s], [0.28, 0.25, 0.24], 0.22),
+    ell('cheek' + N, B.head, [0.8, 0.04, 0.36 * s], [0.33, 0.29, 0.29], 0.24),
     ell('eye' + N, B.head, EYES[s > 0 ? 0 : 1].c, [EYE_R, EYE_R, EYE_R], 0.03),
-    ell('ear' + N, B['ear' + N], [0.3, 0.93, 0.4 * s], [0.23, 0.24, 0.07], 0.05, earBasis(s)),
-    cap('arm' + N, B['arm' + N], [0.62, -0.08, 0.39 * s], [0.93, -0.24, 0.37 * s], 0.11, 0.08, 0.08),
-    ell('paw' + N, B['arm' + N], [1.01, -0.27, 0.36 * s], [0.1, 0.085, 0.09], 0.035),
-    cap('leg' + N, B['leg' + N], [-0.32, -0.42, 0.44 * s], [-0.28, -0.98, 0.47 * s], 0.2, 0.1, 0.1),
-    ell('foot' + N, B['leg' + N], [-0.15, -1.085, 0.47 * s], [0.21, 0.072, 0.105], 0.04),
-    ell('tooth' + N, B.head, [1.2, 0.045, 0.027 * s], [0.022, 0.055, 0.024], 0.006)
+    ell('ear' + N, B['ear' + N], [0.28, 0.96, 0.45 * s], [0.22, 0.23, 0.07], 0.05, earBasis(s)),
+    cap('arm' + N, B['arm' + N], [0.6, -0.12, 0.36 * s], [0.8, -0.26, 0.3 * s], 0.11, 0.085, 0.1),
+    ell('paw' + N, B['arm' + N], [0.87, -0.29, 0.28 * s], [0.085, 0.075, 0.085], 0.035),
+    cap('leg' + N, B['leg' + N], [-0.3, -0.45, 0.46 * s], [-0.26, -1.0, 0.48 * s], 0.22, 0.11, 0.1),
+    ell('foot' + N, B['leg' + N], [-0.13, -1.1, 0.48 * s], [0.2, 0.07, 0.105], 0.04),
+    ell('tooth' + N, B.head, [1.27, 0.07, 0.026 * s], [0.02, 0.045, 0.022], 0.006)
   );
 }
 PRIMS.unshift(
-  ell('body', B.body, [-0.16, -0.15, 0], [0.8, 0.77, 0.8], 0),
-  ell('belly', B.body, [0.06, -0.39, 0], [0.64, 0.48, 0.68], 0.2),
-  ell('head', B.head, HC, [0.64, 0.6, 0.63], 0.13),
-  ell('muzzle', B.head, [1.04, 0.16, 0], [0.2, 0.165, 0.2], 0.1),
-  ell('nose', B.head, [1.245, 0.235, 0], [0.056, 0.046, 0.062], 0.02),
-  ell('tail', B.tail, [-0.99, -0.18, 0], [0.13, 0.11, 0.11], 0.06)
+  ell('body', B.body, [-0.14, -0.13, 0], [0.86, 0.86, 0.9], 0),
+  ell('belly', B.body, [0.08, -0.38, 0], [0.72, 0.56, 0.8], 0.22),
+  ell('head', B.head, HC, [0.68, 0.64, 0.68], 0.12),
+  ell('muzzle', B.head, [1.07, 0.15, 0], [0.21, 0.175, 0.21], 0.1),
+  ell('nose', B.head, [1.275, 0.23, 0], [0.065, 0.052, 0.07], 0.02),
+  ell('tail', B.tail, [-1.04, -0.15, 0], [0.13, 0.11, 0.11], 0.06)
 );
 const P = Object.fromEntries(PRIMS.map((p, i) => [p.name, i]));
+// open, excited running mouth: a cavity carved into the front-bottom of the muzzle
+const MOUTH = ell('mouth', B.head, [1.22, 0.0, 0], [0.15, 0.115, 0.22], 0);
+let _carve = 1e9, _union = 1e9;
 
 function primDist(pr, x, y, z) {
   if (pr.type === 'e') {
@@ -158,13 +161,17 @@ function primDist(pr, x, y, z) {
 const _d = new Float64Array(PRIMS.length);
 // returns the blended distance; per-primitive distances are left in _d
 function sdf(x, y, z) {
-  let d = 1e9;
+  let d = 1e9, teeth = 1e9;
   for (let i = 0; i < PRIMS.length; i++) {
     const di = primDist(PRIMS[i], x, y, z);
     _d[i] = di;
-    d = i === 0 ? di : smin(d, di, PRIMS[i].k);
+    if (PRIMS[i].name.startsWith('tooth')) teeth = Math.min(teeth, di);
+    else d = i === 0 ? di : smin(d, di, PRIMS[i].k);
   }
-  return d;
+  _union = d;
+  _carve = primDist(MOUTH, x, y, z);
+  // carve the open mouth, then hang the two teeth from its upper lip
+  return Math.min(Math.max(d, -_carve), teeth);
 }
 function gradient(x, y, z) {
   const e = 0.002;
@@ -177,21 +184,23 @@ function gradient(x, y, z) {
 
 // ---------------------------------------------------------------- colours
 const C = {
-  tangerine: [0.95, 0.5, 0.14],
-  amber: [1.0, 0.64, 0.22],
-  copper: [0.72, 0.31, 0.09],
-  gold: [1.0, 0.8, 0.42],
-  cream: [1.0, 0.92, 0.8],
-  ivory: [1.0, 0.97, 0.91],
-  creamShade: [0.9, 0.78, 0.64],
-  pink: [1.0, 0.62, 0.64],
-  pinkDeep: [0.9, 0.42, 0.5],
+  tangerine: [0.97, 0.5, 0.12],
+  amber: [1.0, 0.63, 0.2],
+  toasted: [0.86, 0.4, 0.1],
+  goldenBrown: [0.76, 0.44, 0.15],
+  copper: [0.68, 0.29, 0.08],
+  gold: [1.0, 0.77, 0.36],
+  cream: [1.0, 0.87, 0.7],
+  ivory: [1.0, 0.94, 0.84],
+  creamShade: [0.88, 0.73, 0.56],
+  pink: [1.0, 0.6, 0.64],
+  pinkDeep: [0.92, 0.4, 0.5],
   sclera: [0.98, 0.97, 0.95],
-  iris: [0.85, 0.5, 0.18],
-  irisDark: [0.55, 0.27, 0.08],
+  iris: [0.64, 0.37, 0.14],
+  irisDark: [0.42, 0.21, 0.07],
   pupil: [0.02, 0.015, 0.012],
   brow: [0.24, 0.11, 0.05],
-  mouth: [0.36, 0.1, 0.09],
+  mouth: [0.3, 0.06, 0.06],
 };
 
 // material kinds -> fur behaviour
@@ -204,11 +213,11 @@ function browDistance(eye, x, y, z) {
   const up = cross(eye.gaze, side);
   const v = [x - eye.c[0], y - eye.c[1], z - eye.c[2]];
   if (dot(v, eye.gaze) < -0.12) return 1e9;
-  const sx = dot(v, side) / 0.2, sy = dot(v, up);
+  const sx = dot(v, side) / EYE_R, sy = dot(v, up) / EYE_R;
   if (Math.abs(sx) > 1) return 1e9;
   const inner = sx * eye.side > 0 ? 1 : 0; // toward the face centre
-  const arc = 0.27 + 0.045 * (1 - sx * sx) + 0.05 * Math.abs(sx) * inner;
-  return Math.abs(sy - arc) * (1 + 0.6 * sx * sx);
+  const arc = 1.4 + 0.22 * (1 - sx * sx) + 0.25 * Math.abs(sx) * inner;
+  return Math.abs(sy - arc) * EYE_R * (1 + 0.6 * sx * sx);
 }
 
 // returns { col, kind, fur } for a surface point with primitive label `name`
@@ -216,14 +225,15 @@ function shadeRegion(name, p, n, rnd) {
   const [x, y, z] = p;
   const jitter = (noise3(x * 9, y * 9, z * 9) - 0.5) * 0.12;
   const furTone = () => {
-    const t = noise3(x * 4 + 3, y * 4, z * 4);
-    let c = t < 0.5 ? mix3(C.copper, C.tangerine, t * 2) : mix3(C.tangerine, C.amber, (t - 0.5) * 2);
+    const t = noise3(x * 4 + 3, y * 4, z * 4), u = noise3(x * 11, y * 11 + 5, z * 11);
+    let c = t < 0.35 ? mix3(C.copper, C.toasted, t / 0.35) : t < 0.7 ? mix3(C.toasted, C.tangerine, (t - 0.35) / 0.35) : mix3(C.tangerine, C.amber, (t - 0.7) / 0.3);
+    c = mix3(c, C.goldenBrown, smoothstep(0.6, 0.95, u) * 0.6);
     // darker along the spine/back, sunlit gold on the top
     c = mix3(c, C.copper, smoothstep(0.2, 0.9, -n[0]) * 0.25);
     c = mix3(c, C.gold, smoothstep(0.55, 1, n[1]) * 0.25 * rnd());
     return c;
   };
-  const whiteTone = () => mix3(C.ivory, C.cream, noise3(x * 5, y * 5, z * 5 + 7)) ;
+  const whiteTone = () => mix3(C.ivory, C.cream, noise3(x * 5, y * 5, z * 5 + 7));
   const orange = { col: furTone(), kind: KIND.FUR, fur: 1 };
   const white = (len = 0.9) => ({ col: whiteTone(), kind: KIND.WHITE_FUR, fur: len });
 
@@ -235,10 +245,15 @@ function shadeRegion(name, p, n, rnd) {
     const h1 = dot(dir, norm([eye.look[0] - 0.25, eye.look[1] + 0.45, eye.look[2] + 0.1 * eye.side]));
     const h2 = dot(dir, norm([eye.look[0] + 0.15, eye.look[1] - 0.32, eye.look[2] - 0.15 * eye.side]));
     if (h1 > 0.985 || h2 > 0.996) return { col: [1, 1, 1], kind: KIND.EYE, fur: 0, glow: 1 };
-    if (cl > 0.935) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
-    if (cl > 0.8) return { col: mix3(C.irisDark, C.iris, smoothstep(0.93, 0.83, cl) * (0.6 + 0.4 * dir[1] + 0.4)), kind: KIND.EYE, fur: 0 };
-    if (cl > 0.785) return { col: C.irisDark, kind: KIND.EYE, fur: 0 };
+    if (cl > 0.92) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
+    if (cl > 0.76) return { col: mix3(C.irisDark, C.iris, smoothstep(0.92, 0.8, cl) * (0.7 + 0.3 * dir[1])), kind: KIND.EYE, fur: 0 };
+    if (cl > 0.74) return { col: C.irisDark, kind: KIND.EYE, fur: 0 };
     return { col: mix3(C.sclera, [0.85, 0.82, 0.8], smoothstep(0.2, -0.4, cl)), kind: KIND.EYE, fur: 0 };
+  }
+  if (name === 'mouth') {
+    // inside of the open mouth: pink tongue at the bottom, the rest is dark (left empty)
+    if (y < MOUTH.c[1] - 0.02 && Math.abs(z) < 0.15) return { col: mix3(C.pink, C.pinkDeep, 0.35), kind: KIND.SKIN, fur: 0 };
+    return { col: C.mouth, kind: KIND.FEATURE, fur: 0 };
   }
   if (name === 'nose') return { col: mix3(C.pink, C.pinkDeep, smoothstep(0.3, -0.5, n[1])), kind: KIND.FEATURE, fur: 0 };
   if (name.startsWith('tooth')) return { col: C.ivory, kind: KIND.FEATURE, fur: 0 };
@@ -262,32 +277,31 @@ function shadeRegion(name, p, n, rnd) {
     if (browDistance(eye, x, y, z) < 0.03 && dot(n, eye.gaze) > -0.2) return { col: C.brow, kind: KIND.FEATURE, fur: 0 };
   }
 
-  if (name === 'muzzle') {
-    if (x > 1.09 && y < 0.12 && y > 0.06 && Math.abs(z) < 0.11) return { col: C.mouth, kind: KIND.FEATURE, fur: 0 };
-    return white(0.25);
-  }
-  if (name.startsWith('cheek')) return white(1.35);
+  if (name === 'muzzle') return white(0.3);
+  // puffy cheeks: cream in front, orange toward the back, long fluff
+  if (name.startsWith('cheek')) return n[0] > -0.1 + jitter ? white(1.5) : { ...orange, fur: 1.5 };
   if (name === 'head') {
-    // white blaze between the eyes down to the muzzle, white chin; orange cap and eye patches
-    const blaze = Math.abs(z) < 0.1 + 0.25 * smoothstep(0.51, 0.11, y) + jitter * 0.5 && n[0] > 0.25 && y < 0.68;
-    if (blaze || y < 0.14 + jitter) return white(0.6);
-    // spiky crown tuft on top of the head (the sheets' most recognisable outline detail)
-    return { ...orange, fur: n[1] > 0.55 ? 2.2 : 0.9 };
+    // narrow cream blaze between the eyes down to the muzzle, cream chin; orange everywhere else
+    const blaze = Math.abs(z) < 0.06 + 0.2 * smoothstep(0.5, 0.12, y) + jitter * 0.4 && n[0] > 0.3 && y < 0.7;
+    if (blaze || (y < 0.06 + jitter && x > 0.6)) return white(0.6);
+    // spiky crown tuft on top of the head
+    return { ...orange, fur: n[1] > 0.55 ? 2.2 : 1.0 };
   }
   if (name === 'body' || name === 'belly') {
-    // white chest joins the cheeks to the belly, as in the sheets
-    const line = 0.22 + 0.44 * (x - 0.75) - 0.32 * Math.abs(z) + 0.28 * smoothstep(0.15, 0.55, x) + jitter;
-    if (y < line) return white(n[1] < -0.5 ? 0.6 : 1.0);
-    return orange;
+    // cream belly: underside plus a front-bottom oval; the back, sides and rump stay orange
+    const belly = n[1] < -0.62 || (y < -0.05 + 0.3 * (x - 0.55) + jitter && Math.abs(z) < 0.5 + jitter && x > -0.3);
+    if (belly) return white(1.25);
+    const rump = smoothstep(-0.4, -0.8, x), shoulder = smoothstep(0.1, 0.4, x) * smoothstep(0.4, 0.6, Math.abs(z));
+    return { ...orange, fur: 1.0 + 0.3 * rump + 0.25 * shoulder };
   }
-  if (name.startsWith('arm')) return { ...orange, fur: 0.55 };
-  if (name.startsWith('leg')) return y < -0.78 ? white(0.45) : { ...orange, fur: 0.75 };
-  if (name === 'tail') return { ...orange, fur: 0.8 };
+  if (name.startsWith('arm')) return { ...orange, fur: 0.6 };
+  if (name.startsWith('leg')) return { ...orange, fur: 0.75 };
+  if (name === 'tail') return { ...orange, fur: 1.0 };
   return orange;
 }
 
 // ---------------------------------------------------------------- sampling
-const BBOX = { min: [-1.22, -1.2, -1.0], max: [1.4, 1.2, 1.0] };
+const BBOX = { min: [-1.2, -1.22, -1.08], max: [1.42, 1.25, 1.08] };
 
 function buildBandCells(res) {
   const cells = [];
@@ -335,11 +349,11 @@ function skin(label) {
  */
 export function buildHamster({
   candidates = 90000,
-  spacing = 0.032,
+  spacing = 0.036,
   faceSpacing = 0.025,
   featureSpacing = 0.0185,
-  fluff = 3600,
-  tuftSpikes = 150,
+  fluff = 1500,
+  tuftSpikes = 120,
   seed = 7,
   depthCloud = false,
 } = {}) {
@@ -357,8 +371,9 @@ export function buildHamster({
       x -= g[0] * d; y -= g[1] * d; z -= g[2] * d;
       d = sdf(x, y, z);
     }
-    const label = labelAt();
-    const name = PRIMS[label].name;
+    let label = labelAt();
+    let name = PRIMS[label].name;
+    if (!name.startsWith('tooth') && -_carve > _union - 0.004) { label = P.head; name = 'mouth'; }
     if (faceOnly && !(x > 0.6 && y > -0.1 && name !== 'body')) return false;
     const n = gradient(x, y, z);
     sdf(x, y, z); // refresh _d for skinning at final point
@@ -387,11 +402,11 @@ export function buildHamster({
     if (pt.kind === KIND.FEATURE && lum(pt.col) < 0.2) return -1;
     // a thin empty ring around each eyeball so the white eye never melts into the white face
     if (pt.kind !== KIND.EYE)
-      for (const e of EYES) if (Math.hypot(pt.p[0] - e.c[0], pt.p[1] - e.c[1], pt.p[2] - e.c[2]) < EYE_R + 0.05) return -1;
+      for (const e of EYES) if (Math.hypot(pt.p[0] - e.c[0], pt.p[1] - e.c[1], pt.p[2] - e.c[2]) < EYE_R + 0.035) return -1;
     if (pt.glow) return featureSpacing * 0.9;
     if (pt.kind === KIND.EYE || pt.kind === KIND.FEATURE) return featureSpacing;
     if (pt.kind === KIND.SKIN) return featureSpacing * 0.85; // pink paws/feet/ears/nose read as solid pink clusters
-    if (pt.boneB === B.head && pt.p[0] > 0.62 && pt.p[1] > -0.12) return faceSpacing;
+    if (pt.boneB === B.head && pt.p[0] > 0.64 && pt.p[1] > -0.14) return faceSpacing;
     return spacing;
   };
   for (const pt of cand) pt.r = radius(pt);
@@ -432,6 +447,7 @@ export function buildHamster({
   const eyeFade = (p) => {
     let m = 1;
     for (const e of EYES) m = Math.min(m, smoothstep(EYE_R + 0.02, EYE_R + 0.2, Math.hypot(p[0] - e.c[0], p[1] - e.c[1], p[2] - e.c[2])));
+    m = Math.min(m, smoothstep(0.2, 0.36, Math.hypot(p[0] - MOUTH.c[0], p[1] - MOUTH.c[1], p[2] - MOUTH.c[2])));
     return m;
   };
   const strandDir = (pt, tuft) => {
@@ -441,23 +457,29 @@ export function buildHamster({
     let flow;
     if (tuft) flow = [-0.35, 1.0, 0];
     else if (pt.name.startsWith('cheek')) flow = [-0.7, -0.6, 0];
+    else if (pt.kind === KIND.WHITE_FUR) flow = [-0.3, -1, 0]; // belly fluff hangs down
     else flow = [-1, -0.3, 0];
-    const coh = tuft ? 2.2 : 1.0, jit = tuft ? 0.25 : 0.35;
-    return norm([0, 1, 2].map((k) => n[k] + flow[k] * 0.55 + comb[k] * coh + (rnd() - 0.5) * jit));
+    const coh = tuft ? 2.2 : 1.0, jit = tuft ? 0.25 : 0.35, lay = tuft ? 0.55 : 0.95;
+    return norm([0, 1, 2].map((k) => n[k] + flow[k] * lay + comb[k] * coh + (rnd() - 0.5) * jit));
   };
   const tipOf = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, C.gold, 0.3 + rnd() * 0.35) : mix3(pt.col, [1, 1, 1], 0.35));
   for (let s = 0; s < fluff && furry.length; s++) {
     const root = furry[Math.floor(rnd() * furry.length)];
-    const len = 0.11 * root.fur * eyeFade(root.p) * (0.6 + rnd() * 0.7);
-    if (len < 0.03) continue;
+    const len = 0.13 * root.fur * eyeFade(root.p) * (0.45 + rnd() * 0.95);
+    if (len < 0.035) continue;
     const dir = strandDir(root, false);
-    const t = 0.35 + rnd() * 0.65;
-    fur.push({
-      p: [0, 1, 2].map((k) => root.p[k] + dir[k] * len * t - (k === 1 ? 0.25 * len * t * t : 0)),
-      n: root.n, col: mix3(root.col, tipOf(root), t), kind: root.kind,
-      boneA: root.boneA, boneB: root.boneB, w: root.w,
-      t, fleck: rnd() < 0.05 ? 1 : 0, seed: rnd(), size: 0.75, alpha: 0.75 - 0.3 * t,
-    });
+    // dots along the hair ~0.03 apart: long fluffy fur that is still clearly separate dots
+    const steps = Math.max(1, Math.round(len / 0.03));
+    const tip = tipOf(root), seedS = rnd(), fleck = rnd() < 0.05;
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps;
+      fur.push({
+        p: [0, 1, 2].map((q) => root.p[q] + dir[q] * len * t - (q === 1 ? 0.35 * len * t * t : 0)),
+        n: root.n, col: mix3(root.col, tip, t), kind: root.kind,
+        boneA: root.boneA, boneB: root.boneB, w: root.w,
+        t, fleck: fleck && k === steps ? 1 : 0, seed: seedS, size: 0.85 - 0.3 * t, alpha: 0.85 - 0.4 * t,
+      });
+    }
   }
   const tuftRoots = furry.filter((pt) => pt.name === 'head' && pt.n[1] > 0.55 && pt.kind === KIND.FUR);
   for (let s = 0; s < tuftSpikes && tuftRoots.length; s++) {
@@ -481,8 +503,8 @@ export function buildHamster({
   for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.035) pt.sparkle = 1;
   const dotSize = (pt) => (pt.glow ? 1.15 : pt.sparkle ? 1.45 : pt.kind === KIND.SKIN ? 1 : pt.r <= featureSpacing * 1.3 ? 0.86 : pt.r <= faceSpacing ? 0.92 : 1);
   const out = {
-    core: pack(core, (pt) => 0.027 * dotSize(pt), () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),
-    fur: pack(fur, (pt) => 0.027 * pt.size, (pt) => pt.t, (pt) => pt.fleck, (pt) => pt.seed, (pt) => pt.alpha),
+    core: pack(core, (pt) => 0.03 * dotSize(pt), () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),
+    fur: pack(fur, (pt) => 0.029 * pt.size, (pt) => pt.t, (pt) => pt.fleck, (pt) => pt.seed, (pt) => pt.alpha),
     counts: { core: core.length, fur: fur.length },
   };
   // dense surface samples, only for the headless renderer's occlusion buffer

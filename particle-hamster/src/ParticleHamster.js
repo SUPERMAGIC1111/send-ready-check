@@ -85,7 +85,7 @@ const VERTEX = /* glsl */ `
       col = aFlag > 0.5 ? vec3(1.4) : base * (0.85 + 0.4 * diff) * fade;
     } else {
       // aFlag: sparkle dot (surface) or drifting fleck (fur)
-      col = (base * (0.75 + 0.85 * diff) * tw + rim * 0.3 * (0.6 * base + 0.4)) * fade + aFlag * 0.4;
+      col = (base * (0.85 + 0.85 * diff) * tw + rim * 0.3 * (0.6 * base + 0.4)) * fade + aFlag * 0.4;
     }
     vColor = col;
     vKind = aKind;
@@ -116,7 +116,7 @@ const FRAGMENT = /* glsl */ `
     } else {
       // crisp core + soft glow; additive, so black stays black between dots
       float core = smoothstep(0.72, 0.3, r);
-      float halo = exp(-r * r * 5.0) * 0.45;
+      float halo = exp(-r * r * 5.0) * 0.6;
       gl_FragColor = vec4(vColor, vAlpha * (core + halo));
     }
   }

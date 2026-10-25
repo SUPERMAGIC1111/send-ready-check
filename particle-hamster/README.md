@@ -1,6 +1,6 @@
 # Particle Hamster
 
-A right-facing, running 3D hamster drawn as a constellation of ~13k separate glowing dots
+A right-facing, running 3D hamster drawn as a constellation of ~16k separate glowing dots (~8k surface + ~8k dotted fur)
 (Three.js `Points`, additive, black between dots), built from the reference sheets in `reference/`.
 Drag to rotate; it settles back to the hero side pose. An optional ASCII mode renders the same
 3D hamster as depth-aware coloured glyphs.

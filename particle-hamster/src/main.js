@@ -1,8 +1,10 @@
 // Preview page: one renderer, one rAF loop, drag-to-rotate with inertia, settles back to
-// the hero side pose. Query params for repeatable captures: ?view=front&t=0.2&paused=1&run=0
+// the hero side pose. DOTS or ASCII render mode.
+// Query params for repeatable captures: ?view=front&t=0.2&paused=1&run=0&mode=ascii
 import * as THREE from 'three';
 import { animate } from 'motion';
 import { ParticleHamster } from './ParticleHamster.js';
+import { AsciiPass } from './asciiPass.js';
 import { CAMERA, VIEWS } from './shading.js';
 
 const canvas = document.getElementById('stage');
@@ -19,6 +21,8 @@ pivot.position.y = CAMERA.lookY;
 scene.add(pivot);
 
 let hamster = null;
+let mode = params.get('mode') === 'ascii' ? 'ascii' : 'dots';
+const ascii = new AsciiPass(renderer);
 let running = !reducedMotion && params.get('run') !== '0';
 let paused = params.get('paused') === '1';
 let clockT = Number(params.get('t') || 0);
@@ -39,6 +43,7 @@ function resize() {
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
   hamster?.setPointScale(h * dpr, CAMERA.fov, dpr);
+  ascii.setSize(Math.round(w * dpr), Math.round(h * dpr), dpr);
 }
 addEventListener('resize', resize);
 resize();
@@ -71,6 +76,14 @@ canvas.addEventListener('pointercancel', endDrag);
 // ---- view chips + run toggle
 const chips = [...document.querySelectorAll('#ui [data-view]')];
 const runBtn = document.getElementById('run');
+const modeBtns = [...document.querySelectorAll('#ui [data-mode]')];
+function setMode(m) {
+  mode = m;
+  hamster?.setSolid(m === 'ascii');
+  for (const b of modeBtns) b.setAttribute('aria-pressed', String(b.dataset.mode === m));
+}
+modeBtns.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+setMode(mode);
 function setPressed(name) {
   for (const c of chips) c.setAttribute('aria-pressed', String(c.dataset.view === name));
 }
@@ -93,6 +106,7 @@ addEventListener('keydown', (e) => {
   const i = '123456'.indexOf(e.key);
   if (i >= 0) goTo(chips[i].dataset.view);
   if (e.key === ' ') { e.preventDefault(); setRunning(!running); }
+  if (e.key === 'a' || e.key === 'A') setMode(mode === 'ascii' ? 'dots' : 'ascii');
 });
 if (params.has('view')) setPressed(params.get('view'));
 
@@ -120,7 +134,8 @@ function frame(now) {
   }
   pivot.rotation.set(view.pitch, view.yaw, 0);
   hamster?.update(clockT, { run: runBlend.v, assemble: intro.v });
-  renderer.render(scene, camera);
+  if (mode === 'ascii') ascii.render(scene, camera);
+  else renderer.render(scene, camera);
 }
 function start() { if (!raf) { prev = 0; raf = requestAnimationFrame(frame); } }
 function stop() { cancelAnimationFrame(raf); raf = 0; }
@@ -131,6 +146,7 @@ function onLayers(layers) {
   if (hamster) return;
   hamster = new ParticleHamster(layers);
   pivot.add(hamster);
+  hamster.setSolid(mode === 'ascii');
   resize();
   status.remove();
   canvas.dataset.particles = String(hamster.particleCount);
@@ -153,5 +169,6 @@ if (!document.hidden) start();
 addEventListener('pagehide', () => {
   stop();
   hamster?.dispose();
+  ascii.dispose();
   renderer.dispose();
 });

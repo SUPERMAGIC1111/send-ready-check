@@ -20,7 +20,7 @@
   </head>
   <body>
     <canvas id="stage" aria-label="3D particle hamster. Drag to rotate."></canvas>
-    <div id="status">assembling particles…</div>
+    <div id="status">assembling dots…</div>
     <nav id="ui" aria-label="View">
       <button data-view="side" aria-pressed="true" title="1">Side</button>
       <button data-view="three-quarter" title="2">45°</button>
@@ -30,6 +30,9 @@
       <button data-view="profile" title="6">Profile</button>
       <span class="sep"></span>
       <button id="run" aria-pressed="true" title="Space">Run</button>
+      <span class="sep"></span>
+      <button data-mode="dots" aria-pressed="true" title="A">Dots</button>
+      <button data-mode="ascii" title="A">ASCII</button>
     </nav>
     <script type="module" src="./src/main.js"></script>
   </body>

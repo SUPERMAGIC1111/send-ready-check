@@ -187,8 +187,8 @@ const C = {
   pink: [1.0, 0.62, 0.64],
   pinkDeep: [0.9, 0.42, 0.5],
   sclera: [0.98, 0.97, 0.95],
-  iris: [0.42, 0.22, 0.08],
-  irisDark: [0.16, 0.07, 0.03],
+  iris: [0.85, 0.5, 0.18],
+  irisDark: [0.55, 0.27, 0.08],
   pupil: [0.02, 0.015, 0.012],
   brow: [0.24, 0.11, 0.05],
   mouth: [0.36, 0.1, 0.09],
@@ -325,17 +325,29 @@ function skin(label) {
 }
 
 /**
- * Build all particles in the rest pose.
- * @returns {{core: Layer, fur: Layer, counts: object}}
- * Layer = { count, position, normal, color, size, boneA, boneB, weight, kind, strandT, seed }
+ * Build the dot cloud in the rest pose.
+ * The anatomy surface is densely sampled, then thinned into evenly spaced (Poisson-disc) dots, the
+ * way the Motion.dev sphere is made of separate points. Spacing is tighter on the facial
+ * features so eyes, brows and nose read. Pupils are left empty (black) apart from their
+ * catch-lights. Sparse fluff dots and dotted spikes (crown tuft) make the outline irregular.
+ * @returns {{core: Layer, fur: Layer, depth?: Layer, counts: object}}
+ * Layer = { count, position, normal, color, size, boneA, boneB, weight, kind, strandT, flag, seed, alpha }
  */
-export function buildHamster({ coreCount = 46000, faceCount = 9000, strands = 9500, strandSteps = 4, seed = 7 } = {}) {
+export function buildHamster({
+  candidates = 90000,
+  spacing = 0.032,
+  faceSpacing = 0.025,
+  featureSpacing = 0.0185,
+  fluff = 3600,
+  tuftSpikes = 150,
+  seed = 7,
+  depthCloud = false,
+} = {}) {
   const rnd = mulberry32(seed);
   const { cells, size } = buildBandCells([66, 58, 52]);
   const nCells = cells.length / 3;
 
-  const core = [];
-  const surface = []; // candidate roots for fur
+  const cand = [];
   const tryPoint = (x, y, z, faceOnly) => {
     let d = sdf(x, y, z);
     if (Math.abs(d) > 0.02) return false;
@@ -352,12 +364,9 @@ export function buildHamster({ coreCount = 46000, faceCount = 9000, strands = 95
     sdf(x, y, z); // refresh _d for skinning at final point
     const [boneA, boneB, w] = skin(label);
     const reg = shadeRegion(name, [x, y, z], n, rnd);
-    const pt = { p: [x, y, z], n, col: reg.col, kind: reg.kind, fur: reg.fur, glow: reg.glow || 0, boneA, boneB, w, name, face: faceOnly };
-    core.push(pt);
-    if (reg.fur > 0 && !faceOnly) surface.push(pt);
+    cand.push({ p: [x, y, z], n, col: reg.col, kind: reg.kind, fur: reg.fur, glow: reg.glow || 0, boneA, boneB, w, name });
     return true;
   };
-
   const sample = (target, faceOnly) => {
     let got = 0, guard = 0;
     while (got < target && guard++ < target * 40) {
@@ -367,62 +376,118 @@ export function buildHamster({ coreCount = 46000, faceCount = 9000, strands = 95
       if (tryPoint(x, y, z, faceOnly)) got++;
     }
   };
-  sample(coreCount, false);
-  sample(faceCount, true);
+  sample(candidates, false);
+  sample(Math.round(candidates * 0.25), true);
 
-  // ---- fur strands
+  // ---- Poisson-disc thinning: features first so they claim their dots before the fur does
+  const lum = (c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  const radius = (pt) => {
+    // dark features (pupils, brows, mouth line) are drawn as negative space: no dots at all
+    if (pt.kind === KIND.EYE && !pt.glow && lum(pt.col) < 0.06) return -1;
+    if (pt.kind === KIND.FEATURE && lum(pt.col) < 0.2) return -1;
+    // a thin empty ring around each eyeball so the white eye never melts into the white face
+    if (pt.kind !== KIND.EYE)
+      for (const e of EYES) if (Math.hypot(pt.p[0] - e.c[0], pt.p[1] - e.c[1], pt.p[2] - e.c[2]) < EYE_R + 0.05) return -1;
+    if (pt.glow) return featureSpacing * 0.9;
+    if (pt.kind === KIND.EYE || pt.kind === KIND.FEATURE) return featureSpacing;
+    if (pt.kind === KIND.SKIN) return featureSpacing * 0.85; // pink paws/feet/ears/nose read as solid pink clusters
+    if (pt.boneB === B.head && pt.p[0] > 0.62 && pt.p[1] > -0.12) return faceSpacing;
+    return spacing;
+  };
+  for (const pt of cand) pt.r = radius(pt);
+  for (let i = cand.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [cand[i], cand[j]] = [cand[j], cand[i]];
+  }
+  cand.sort((a, b) => (a.r === b.r ? 0 : a.r - b.r));
+  const cellSize = featureSpacing;
+  const grid = new Map();
+  const key = (i, j, k) => (i * 73856093) ^ (j * 19349663) ^ (k * 83492791);
+  const core = [];
+  for (const pt of cand) {
+    if (pt.r < 0) continue;
+    const [x, y, z] = pt.p;
+    const ci = Math.floor(x / cellSize), cj = Math.floor(y / cellSize), ck = Math.floor(z / cellSize);
+    const reach = Math.ceil(pt.r / cellSize);
+    let free = true;
+    for (let i = -reach; i <= reach && free; i++)
+      for (let j = -reach; j <= reach && free; j++)
+        for (let k = -reach; k <= reach && free; k++) {
+          const bucket = grid.get(key(ci + i, cj + j, ck + k));
+          if (!bucket) continue;
+          for (const q of bucket) {
+            if (Math.hypot(q.p[0] - x, q.p[1] - y, q.p[2] - z) < pt.r) { free = false; break; }
+          }
+        }
+    if (!free) continue;
+    const kk = key(ci, cj, ck);
+    if (!grid.has(kk)) grid.set(kk, []);
+    grid.get(kk).push(pt);
+    core.push(pt);
+  }
+
+  // ---- fluff: sparse dots floating just off the fur, plus dotted spikes for the crown tuft
   const fur = [];
+  const furry = core.filter((pt) => pt.fur > 0);
   const eyeFade = (p) => {
     let m = 1;
     for (const e of EYES) m = Math.min(m, smoothstep(EYE_R + 0.02, EYE_R + 0.2, Math.hypot(p[0] - e.c[0], p[1] - e.c[1], p[2] - e.c[2])));
     return m;
   };
-  for (let s = 0; s < strands && surface.length; s++) {
-    const root = surface[Math.floor(rnd() * surface.length)];
-    const { p, n } = root;
-    const fade = eyeFade(p);
-    const tuft = root.name === 'head' && n[1] > 0.55 && root.kind === KIND.FUR;
-    let len = 0.11 * root.fur * fade * (0.55 + rnd() * 0.75);
-    if (len < 0.015) continue;
-    // low-frequency noise gives neighbouring hairs the same lean -> locks instead of haze
+  const strandDir = (pt, tuft) => {
+    const { p, n } = pt;
     const f = tuft ? 7 : 3.5;
     const comb = [noise3(p[0] * f, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f + 11, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f, p[1] * f + 23, p[2] * f) - 0.5];
     let flow;
     if (tuft) flow = [-0.35, 1.0, 0];
-    else if (root.name.startsWith('cheek')) flow = [-0.7, -0.6, 0]; // cheek fluff sweeps back into the chest
+    else if (pt.name.startsWith('cheek')) flow = [-0.7, -0.6, 0];
     else flow = [-1, -0.3, 0];
-    const jit = tuft ? 0.25 : 0.35, coh = tuft ? 2.2 : 1.0;
-    const dir = norm([
-      n[0] + flow[0] * 0.55 + comb[0] * coh + (rnd() - 0.5) * jit,
-      n[1] + flow[1] * 0.55 + comb[1] * coh + (rnd() - 0.5) * jit,
-      n[2] + flow[2] * 0.55 + comb[2] * coh + (rnd() - 0.5) * jit,
-    ]);
-    const tipCol = root.kind === KIND.FUR ? mix3(root.col, C.gold, 0.35 + rnd() * 0.3) : mix3(root.col, [1, 1, 1], 0.4);
-    const rootCol = root.kind === KIND.FUR ? mix3(root.col, C.copper, 0.25) : mix3(root.col, C.creamShade, 0.35);
-    const fleck = rnd() < 0.035;
-    const strandSeed = rnd();
-    const steps = Math.max(strandSteps - 1, Math.round(len / 0.028));
+    const coh = tuft ? 2.2 : 1.0, jit = tuft ? 0.25 : 0.35;
+    return norm([0, 1, 2].map((k) => n[k] + flow[k] * 0.55 + comb[k] * coh + (rnd() - 0.5) * jit));
+  };
+  const tipOf = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, C.gold, 0.3 + rnd() * 0.35) : mix3(pt.col, [1, 1, 1], 0.35));
+  for (let s = 0; s < fluff && furry.length; s++) {
+    const root = furry[Math.floor(rnd() * furry.length)];
+    const len = 0.11 * root.fur * eyeFade(root.p) * (0.6 + rnd() * 0.7);
+    if (len < 0.03) continue;
+    const dir = strandDir(root, false);
+    const t = 0.35 + rnd() * 0.65;
+    fur.push({
+      p: [0, 1, 2].map((k) => root.p[k] + dir[k] * len * t - (k === 1 ? 0.25 * len * t * t : 0)),
+      n: root.n, col: mix3(root.col, tipOf(root), t), kind: root.kind,
+      boneA: root.boneA, boneB: root.boneB, w: root.w,
+      t, fleck: rnd() < 0.05 ? 1 : 0, seed: rnd(), size: 0.75, alpha: 0.75 - 0.3 * t,
+    });
+  }
+  const tuftRoots = furry.filter((pt) => pt.name === 'head' && pt.n[1] > 0.55 && pt.kind === KIND.FUR);
+  for (let s = 0; s < tuftSpikes && tuftRoots.length; s++) {
+    const root = tuftRoots[Math.floor(rnd() * tuftRoots.length)];
+    const len = 0.11 * 2.2 * (0.6 + rnd() * 0.7);
+    const dir = strandDir(root, true);
+    const steps = Math.max(3, Math.round(len / 0.026));
+    const seedS = rnd(), tip = tipOf(root);
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const droop = (tuft ? 0.05 : 0.25) * len * t * t;
       fur.push({
-        p: [p[0] + dir[0] * len * t, p[1] + dir[1] * len * t - droop, p[2] + dir[2] * len * t],
-        n,
-        col: mix3(rootCol, tipCol, t),
-        kind: root.kind,
+        p: [0, 1, 2].map((k) => root.p[k] + dir[k] * len * t - (k === 1 ? 0.05 * len * t * t : 0)),
+        n: root.n, col: mix3(root.col, tip, t), kind: root.kind,
         boneA: root.boneA, boneB: root.boneB, w: root.w,
-        t, fleck: fleck && i === steps ? 1 : 0, seed: strandSeed,
-        size: tuft ? 0.03 * (1 - t * 0.6) : 0.026 * (1 - t * 0.55),
-        alpha: tuft ? 0.95 * (1 - 0.45 * t) : 0.8 * (1 - 0.55 * t),
+        t, fleck: 0, seed: seedS, size: 0.9 - 0.35 * t, alpha: 0.95 - 0.4 * t,
       });
     }
   }
 
-  return {
-    core: pack(core, (pt) => (pt.face ? 0.023 : 0.034) * (pt.kind === KIND.EYE ? 0.85 : 1), () => 0, (pt) => pt.glow || 0, null, () => 1),
-    fur: pack(fur, (pt) => pt.size, (pt) => pt.t, (pt) => pt.fleck, (pt) => pt.seed, (pt) => pt.alpha),
+  // a few sparse sparkle dots (bigger, brighter) on the fur, like the Motion.dev field
+  for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.035) pt.sparkle = 1;
+  const dotSize = (pt) => (pt.glow ? 1.15 : pt.sparkle ? 1.45 : pt.kind === KIND.SKIN ? 1 : pt.r <= featureSpacing * 1.3 ? 0.86 : pt.r <= faceSpacing ? 0.92 : 1);
+  const out = {
+    core: pack(core, (pt) => 0.027 * dotSize(pt), () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),
+    fur: pack(fur, (pt) => 0.027 * pt.size, (pt) => pt.t, (pt) => pt.fleck, (pt) => pt.seed, (pt) => pt.alpha),
     counts: { core: core.length, fur: fur.length },
   };
+  // dense surface samples, only for the headless renderer's occlusion buffer
+  if (depthCloud) out.depth = pack(cand, () => 0.03, () => 0, () => 0, null, () => 1);
+  return out;
 }
 
 function pack(list, sizeOf, tOf, flagOf, seedOf, alphaOf) {
@@ -447,7 +512,7 @@ function pack(list, sizeOf, tOf, flagOf, seedOf, alphaOf) {
     L.position.set(pt.p, i * 3);
     L.normal.set(pt.n, i * 3);
     L.color.set(pt.col, i * 3);
-    L.size[i] = sizeOf(pt) * (0.85 + r() * 0.3);
+    L.size[i] = sizeOf(pt) * (0.72 + r() * 0.56);
     L.boneA[i] = pt.boneA;
     L.boneB[i] = pt.boneB;
     L.weight[i] = pt.w;

@@ -1,19 +1,20 @@
-// Reusable Three.js particle hamster. Takes the particle layers produced by
-// buildHamster() (see hamsterModel.js) and skins them on the GPU with the run-cycle
-// bone matrices from poseMatrices(). Drop it into any scene (e.g. inside an orb later).
+// Reusable Three.js dot hamster. Takes the dot layers produced by buildHamster() (see
+// hamsterModel.js) and skins them on the GPU with the run-cycle bone matrices from
+// poseMatrices(). Drop it into any scene (e.g. inside an orb later).
 //
 //   const hamster = new ParticleHamster(layers);
 //   scene.add(hamster);
-//   hamster.setPointScale(drawingBufferHeight, camera.fov);
+//   hamster.setPointScale(drawingBufferHeight, camera.fov, pixelRatio);
 //   hamster.update(seconds, { run: 1, assemble: 1 });
+//   hamster.setSolid(true);   // opaque, enlarged dots: the source image for the ASCII pass
 //   hamster.dispose();
 import * as THREE from 'three';
 import { BONES, poseMatrices } from './hamsterModel.js';
-import { LIGHT } from './shading.js';
+import { LIGHT, ASCII, CAMERA } from './shading.js';
 
 const BONE_COUNT = BONES.length;
 
-// Lighting mirrors shadeParticle() in shading.js (used by the headless preview renderer).
+// Dot shading mirrors shadeDot() in shading.js (used by the headless preview renderer).
 const VERTEX = /* glsl */ `
   uniform mat4 uBones[${BONE_COUNT}];
   uniform float uTime;
@@ -21,6 +22,9 @@ const VERTEX = /* glsl */ `
   uniform float uScale;
   uniform float uMinSize;
   uniform float uAssemble;
+  uniform float uDotScale;
+  uniform float uFocus;
+  uniform float uSolid;
   uniform vec3 uLight;
 
   attribute vec3 aColor;
@@ -36,6 +40,7 @@ const VERTEX = /* glsl */ `
 
   varying vec3 vColor;
   varying float vAlpha;
+  varying float vKind;
 
   vec3 scatter(float s) {
     // deterministic scatter direction for the assemble-in effect
@@ -50,12 +55,12 @@ const VERTEX = /* glsl */ `
     vec3 n = normalize(mix(mat3(A) * normal, mat3(B) * normal, aWeight));
 
   #ifdef FUR
-    // tips trail backwards while running and sway a little
-    float sw = sin(uTime * (5.0 + 9.0 * uRun) + aSeed * 6.2831);
-    p += vec3(-0.022 * uRun - 0.004, 0.012 * sw, 0.008 * sw) * aT;
-    // a few flecks drift off the fur and come back
+    // loose dots trail backwards while running and sway a little
+    float sw = sin(uTime * (4.0 + 7.0 * uRun) + aSeed * 6.2831);
+    p += vec3(-0.02 * uRun - 0.004, 0.012 * sw, 0.008 * sw) * aT;
+    // a few dots escape the fur, drift off and come back
     float d = pow(max(0.0, sin(uTime * 0.6 + aSeed * 40.0)), 6.0) * aFlag;
-    p += n * d * 0.24 + vec3(-0.14, 0.09, 0.0) * d;
+    p += n * d * 0.3 + vec3(-0.18, 0.1, 0.0) * d;
   #endif
 
     // assemble from a scattered cloud (uAssemble 0 -> 1)
@@ -68,46 +73,56 @@ const VERTEX = /* glsl */ `
 
     float ndl = dot(nv, uLight);
     float diff = clamp((ndl + 0.45) / 1.45, 0.0, 1.0);
-    float rim = pow(1.0 - clamp(nv.z, 0.0, 1.0), 2.5);
+    float rim = pow(1.0 - clamp(nv.z, 0.0, 1.0), 2.0);
+    float tw = 0.88 + 0.12 * sin(uTime * 1.7 + aSeed * 61.0);
+    float wave = 0.5 + 0.5 * sin(dot(position, vec3(2.1, 1.3, 1.7)) - uTime * 0.9);
+    vec3 base = mix(aColor, aColor * vec3(1.08, 0.92, 1.05) + vec3(0.05, 0.0, 0.04), 0.25 * wave);
     vec3 col;
+    // nearer dots brighter, farther dimmer: depth reads even in a still frame
+    float fade = clamp(1.0 - (-mv.z - uFocus) * 0.45, 0.5, 1.2);
     if (aKind > 2.5 && aKind < 3.5) {
-      // eyes: glossy with fixed catch-lights
-      col = aFlag > 0.5 ? vec3(1.2) : aColor * (0.62 + 0.45 * diff);
+      // eyes: catch-lights are the brightest dots on the character
+      col = aFlag > 0.5 ? vec3(1.4) : base * (0.85 + 0.4 * diff) * fade;
     } else {
-    #ifdef FUR
-      float lit = 0.3 + 0.88 * diff + 0.12 * aT;
-    #else
-      float lit = 0.3 + 0.88 * diff;
-    #endif
-      col = aColor * lit + rim * 0.3 * (0.5 * aColor + 0.475);
-    #ifdef FUR
-      col += aFlag * 0.35;
-    #endif
+      // aFlag: sparkle dot (surface) or drifting fleck (fur)
+      col = (base * (0.75 + 0.85 * diff) * tw + rim * 0.3 * (0.6 * base + 0.4)) * fade + aFlag * 0.4;
     }
     vColor = col;
-    vAlpha = aAlpha * mix(0.25, 1.0, k);
+    vKind = aKind;
+    vAlpha = aAlpha * mix(0.2, 1.0, k);
 
-    gl_PointSize = max(uMinSize, aSize * uScale / -mv.z);
+    float boost = 0.9 + 0.2 * rim;
+    // ASCII source pass: features (kind >= 2) grow less so pupils and eye rings stay open
+    float grow = uSolid > 0.5 ? (aKind > 1.5 ? ${ASCII.featureDotScale.toFixed(3)} : uDotScale) : uDotScale;
+    gl_PointSize = max(uMinSize, aSize * boost * grow * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `;
 
 const FRAGMENT = /* glsl */ `
+  uniform float uSolid;
   varying vec3 vColor;
   varying float vAlpha;
+  varying float vKind;
   void main() {
     vec2 c = gl_PointCoord - 0.5;
     float r = length(c) * 2.0;
     if (r > 1.0) discard;
-  #ifdef FUR
-    gl_FragColor = vec4(vColor, vAlpha * pow(1.0 - r, 1.2));
-  #else
-    gl_FragColor = vec4(vColor * (1.06 - 0.16 * r * r), 1.0);
-  #endif
+    if (uSolid > 0.5) {
+      // keep lit colours below the 8-bit clamp so orange stays orange for the glyph pass
+      // white fur a step below the pure-white eyes so the eyes keep the densest glyphs
+      float gain = ${ASCII.solidGain.toFixed(3)} * (abs(vKind - 1.0) < 0.5 ? ${ASCII.whiteFurGain.toFixed(3)} : 1.0);
+      gl_FragColor = vec4(vColor * gain, 1.0);
+    } else {
+      // crisp core + soft glow; additive, so black stays black between dots
+      float core = smoothstep(0.72, 0.3, r);
+      float halo = exp(-r * r * 5.0) * 0.45;
+      gl_FragColor = vec4(vColor, vAlpha * (core + halo));
+    }
   }
 `;
 
-// depth-only inner body so far-side particles never show through gaps
+// depth-only inner body so dots on the far side never show through
 const OCCLUDER_VERTEX = /* glsl */ `
   uniform mat4 uBones[${BONE_COUNT}];
   attribute float aBone;
@@ -136,27 +151,19 @@ function layerGeometry(L) {
 }
 
 function occluderGeometry() {
-  // slightly shrunken body, belly and head ellipsoids (rest pose), tagged with their bone
+  // shrunken body, belly and head ellipsoids (rest pose), tagged with their bone
   const parts = [
-    { c: [-0.16, -0.15, 0], r: [0.74, 0.71, 0.74], bone: 0 },
-    { c: [0.06, -0.39, 0], r: [0.58, 0.42, 0.62], bone: 0 },
-    { c: [0.5, 0.36, 0], r: [0.58, 0.54, 0.57], bone: 1 },
+    { c: [-0.16, -0.15, 0], r: [0.72, 0.69, 0.72], bone: 0 },
+    { c: [0.06, -0.39, 0], r: [0.56, 0.4, 0.6], bone: 0 },
+    { c: [0.5, 0.36, 0], r: [0.56, 0.52, 0.55], bone: 1 },
   ];
   const geos = parts.map(({ c, r, bone }) => {
     const g = new THREE.SphereGeometry(1, 28, 20);
     g.scale(r[0], r[1], r[2]);
     g.translate(c[0], c[1], c[2]);
-    g.deleteAttribute('uv');
-    g.deleteAttribute('normal');
     g.setAttribute('aBone', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(bone), 1));
     return g;
   });
-  const merged = mergeIndexed(geos);
-  geos.forEach((g) => g.dispose());
-  return merged;
-}
-
-function mergeIndexed(geos) {
   let vCount = 0, iCount = 0;
   for (const g of geos) { vCount += g.attributes.position.count; iCount += g.index.count; }
   const pos = new Float32Array(vCount * 3), bone = new Float32Array(vCount), idx = new Uint32Array(iCount);
@@ -167,6 +174,7 @@ function mergeIndexed(geos) {
     for (let i = 0; i < g.index.count; i++) idx[io + i] = g.index.array[i] + vo;
     vo += g.attributes.position.count;
     io += g.index.count;
+    g.dispose();
   }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -181,14 +189,16 @@ export class ParticleHamster extends THREE.Group {
     super();
     this.name = 'ParticleHamster';
     this._boneData = new Float32Array(BONE_COUNT * 16);
-    const bones = Array.from({ length: BONE_COUNT }, () => new THREE.Matrix4());
     const shared = {
-      uBones: { value: bones },
+      uBones: { value: Array.from({ length: BONE_COUNT }, () => new THREE.Matrix4()) },
       uTime: { value: 0 },
       uRun: { value: 1 },
       uScale: { value: 800 },
       uMinSize: { value: 1 },
       uAssemble: { value: 1 },
+      uDotScale: { value: 1 },
+      uSolid: { value: 0 },
+      uFocus: { value: CAMERA.distance },
       uLight: { value: new THREE.Vector3(...LIGHT) },
     };
     this.uniforms = shared;
@@ -203,26 +213,23 @@ export class ParticleHamster extends THREE.Group {
     this.occluder.renderOrder = 0;
     this.occluder.frustumCulled = false;
 
-    this._coreMat = new THREE.ShaderMaterial({
-      uniforms: shared,
-      vertexShader: VERTEX,
-      fragmentShader: FRAGMENT,
-    });
+    const dotMaterial = (fur) =>
+      new THREE.ShaderMaterial({
+        uniforms: shared,
+        vertexShader: VERTEX,
+        fragmentShader: FRAGMENT,
+        defines: fur ? { FUR: '' } : {},
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+    this._coreMat = dotMaterial(false);
+    this._furMat = dotMaterial(true);
     this.core = new THREE.Points(layerGeometry(layers.core), this._coreMat);
-    this.core.renderOrder = 1;
-    this.core.frustumCulled = false;
-
-    this._furMat = new THREE.ShaderMaterial({
-      uniforms: shared,
-      vertexShader: VERTEX,
-      fragmentShader: FRAGMENT,
-      defines: { FUR: '' },
-      transparent: true,
-      depthWrite: false,
-    });
     this.fur = new THREE.Points(layerGeometry(layers.fur), this._furMat);
+    this.core.renderOrder = 1;
     this.fur.renderOrder = 2;
-    this.fur.frustumCulled = false;
+    this.core.frustumCulled = this.fur.frustumCulled = false;
 
     this.add(this.occluder, this.core, this.fur);
     this.particleCount = layers.core.count + layers.fur.count;
@@ -232,7 +239,18 @@ export class ParticleHamster extends THREE.Group {
   /** world-size -> pixel conversion; call on resize with the drawing-buffer height */
   setPointScale(bufferHeight, fovDeg, pixelRatio = 1) {
     this.uniforms.uScale.value = bufferHeight / (2 * Math.tan((fovDeg * Math.PI) / 360));
-    this.uniforms.uMinSize.value = Math.max(1, 0.9 * pixelRatio);
+    this.uniforms.uMinSize.value = Math.max(1, 1.2 * pixelRatio);
+  }
+
+  /** opaque enlarged dots with depth: the source image the ASCII pass samples */
+  setSolid(on) {
+    this.uniforms.uSolid.value = on ? 1 : 0;
+    this.uniforms.uDotScale.value = on ? ASCII.solidDotScale : 1;
+    for (const m of [this._coreMat, this._furMat]) {
+      m.blending = on ? THREE.NoBlending : THREE.AdditiveBlending;
+      m.transparent = !on;
+      m.depthWrite = on;
+    }
   }
 
   /** @param {number} t seconds; run 0..1 blends idle -> run; assemble 0..1 for the intro */

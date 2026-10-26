@@ -709,7 +709,8 @@ const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
  *   floorR: the running surface is the inside of the wheel, a circle of that radius in model units
  *   whose lowest point is under x = floorC, so paws far forward or back still touch it)
  */
-function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
+function scurryLimbs(cyc, run, SC, A, rot, { pb, bodyX, bodyY, lean = 0, sx = 1, sy = 1 }) {
+  const cl = Math.cos(lean), sl = Math.sin(lean);
   for (const tip of A.tips) {
     const pv = A.pivots[tip.bone], p0 = tip.p;
     let u = (cyc + (SC.phases[tip.name] || 0)) % 1;
@@ -732,7 +733,10 @@ function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
     const th = Math.atan2(x, L);
     const c = Math.cos(th), sn = Math.sin(th), dx = p0[0] - pv[0], dy = p0[1] - pv[1];
     const q = [pv[0] + c * dx - sn * dy, pv[1] + sn * dx + c * dy];
-    rot[tip.bone] = about(pv, R(0, 0, th), [p0[0] + x - bodyX - q[0], p0[1] + y - bodyY - q[1], 0]);
+    // world target -> body-local (undo the body's surge/bob, lean and squash), so the tip lands on it
+    const dx0 = p0[0] + x - pb[0] - bodyX, dy0 = p0[1] + y - pb[1] - bodyY;
+    const tx = pb[0] + (cl * dx0 + sl * dy0) / sx, ty = pb[1] + (-sl * dx0 + cl * dy0) / sy;
+    rot[tip.bone] = about(pv, R(0, 0, th), [tx - q[0], ty - q[1], 0]);
   }
 }
 
@@ -748,7 +752,8 @@ function poseV3(t, run, out, cfg, contact) {
   // scurry (texture lab): the body only bobs and surges a little, no lean or squash
   const SC = M.scurry;
   const bodyX = SC ? run * SC.surge * Math.sin(2 * ph + 0.9) : 0, bodyY = SC ? run * M.bounce * bounce + breathe : 0;
-  if (SC) rot[B.body] = about(PV[B.body], I4(), [bodyX, bodyY, 0]);
+  // V10: a lean and a squash-and-stretch per variant (scurry); the squash keeps the body's volume
+  if (SC) rot[B.body] = about(PV[B.body], R(0, 0, run * (SC.lean || 0)), [bodyX, bodyY, 0], SC.squash ? [1 + sq * 0.5, 1 - sq, 1 + sq * 0.5] : undefined);
   // head: follow-through a beat behind the body, personality tilt/turn
   const expr = bump(t, M.expressionEvery, 1.2, 0.3);
   const tilt = M.tilt * Math.sin(t * M.tiltSpeed) + M.tilt * 0.6 * bump(t, M.tiltEvery, 1.6, 0.5);
@@ -758,7 +763,8 @@ function poseV3(t, run, out, cfg, contact) {
   const perk = M.earPerk * expr;
   rot[B.earN] = about(PV[B.earN], R(run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
   rot[B.earF] = about(PV[B.earF], R(-run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
-  if (SC) scurryLimbs(ph / TAU, run, SC, A, rot, bodyX, bodyY);
+  const lean = SC ? run * (SC.lean || 0) : 0, sqs = SC?.squash ? [1 + sq * 0.5, 1 - sq] : [1, 1];
+  if (SC) scurryLimbs(ph / TAU, run, SC, A, rot, { pb: PV[B.body], bodyX, bodyY, lean, sx: sqs[0], sy: sqs[1] });
   // hind legs: alternate (half a stride apart)
   const legLen = Math.hypot(an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1]) + an.foot.r[1];
   const legAxis = norm([an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1], 0]);

@@ -63,4 +63,8 @@ export const LAB_VARIANTS = [
     style: { round: 0.9, gloss: 0.22 } },
   { id: 'happyV9', label: 'Happy Hamster V9', note: 'candidate', character: 'happyHamsterV9', render: 'voxel', build: happyBuild,
     style: { round: 1.0, gloss: 0.2 } },
+  // --- V10 four working legs: three real running variants on the new leg rig (V9 unchanged above)
+  { id: 'v10A', label: 'V10 A Scurry', note: 'candidate', character: 'happyV10A', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v10B', label: 'V10 B Cartoon Dash', note: 'candidate', character: 'happyV10B', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v10C', label: 'V10 C Speedy', note: 'candidate', character: 'happyV10C', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
 ];

@@ -344,4 +344,38 @@ happy9.run = {
   scurry: { ...happy.run.scurry, step: 0.5, lift: 0.12, surge: 0.04, reach: { paw: 0.14, foot: -0.14 }, floorR: 2.82, floorC: 0.1 },
 };
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, brain };
+// --- V10 "four working legs": the V9 happy hamster with a real leg rig. Hind legs come out of the
+// rump, front legs out of the chest, both thick enough to read (orange upper and lower sections,
+// pink paws), and the belly is lifted so the legs show under the body.
+const v10 = clone(happy9);
+Object.assign(v10, { id: 'happyV10', name: 'Happy Hamster V10' });
+Object.assign(v10.anatomy, {
+  // underside lifted ~0.34 (body bottom -1.04 instead of -1.38) so ~0.45 of each leg shows
+  body: { c: [-0.5, -0.52, 0], r: [1.08, 0.52, 0.94] },
+  belly: { c: [-0.1, -0.7, 0], r: [0.95, 0.3, 0.92] },
+  // cheeks as huge as V9, lifted 0.12 so the front legs show below them
+  cheek: { ...happy9.anatomy.cheek, c: [happy9.anatomy.cheek.c[0], happy9.anatomy.cheek.c[1] + 0.12, happy9.anatomy.cheek.c[2]] },
+  // rounded thigh / shoulder (r1) tapering to the lower leg (r2), set wide enough to show
+  leg: { a: [-0.92, -0.84, 0.56], b: [-0.96, -1.3, 0.64], r1: 0.27, r2: 0.15 },
+  foot: { c: [-0.9, -1.44, 0.66], r: [0.22, 0.085, 0.15] },
+  arm: { a: [0.5, -0.84, 0.48], b: [0.62, -1.28, 0.54], r1: 0.21, r2: 0.13 },
+  paw: { c: [0.8, -1.44, 0.56], r: [0.18, 0.085, 0.14] },
+});
+const SC10 = { floorR: 2.82, floorC: 0.1, reach: null };
+// A: real hamster scurry: low, fast, alternating diagonal pairs, even steps
+const v10A = clone(v10);
+Object.assign(v10A, { id: 'happyV10A', name: 'V10 A Scurry' });
+v10A.run = { ...happy9.run, period: 0.2, bounce: 0.05, cheekJiggle: 0.08, earBounce: 0.2,
+  scurry: { ...SC10, step: 0.44, lift: 0.11, duty: 0.5, surge: 0.03, reach: { paw: 0.08, foot: -0.1 }, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } } };
+// B: cute cartoon dash: long exaggerated strides, squash and stretch, bouncing cheeks and ears
+const v10B = clone(v10);
+Object.assign(v10B, { id: 'happyV10B', name: 'V10 B Cartoon Dash' });
+v10B.run = { ...happy9.run, period: 0.27, bounce: 0.12, squash: 0.1, cheekJiggle: 0.2, earFlop: 0.3, earBounce: 0.4, headLag: 0.1,
+  scurry: { ...SC10, step: 0.66, lift: 0.2, duty: 0.45, surge: 0.08, squash: true, reach: { paw: 0.1, foot: -0.12 }, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } } };
+// C: speedy little bastard: very quick small steps, short hind push, long front reach, a lean
+const v10C = clone(v10);
+Object.assign(v10C, { id: 'happyV10C', name: 'V10 C Speedy' });
+v10C.run = { ...happy9.run, period: 0.15, bounce: 0.06, squash: 0.04, cheekJiggle: 0.12, earBounce: 0.3, headLag: 0.08,
+  scurry: { ...SC10, step: 0.38, lift: 0.09, duty: 0.34, surge: 0.02, squash: true, lean: -0.05, reach: { paw: 0.16, foot: -0.18 }, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } } };
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, brain };

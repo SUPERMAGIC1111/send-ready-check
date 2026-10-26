@@ -164,7 +164,8 @@ function makeAnatomy(cfg) {
     const N = s > 0 ? 'N' : 'F';
     const armDir = norm([A.paw.c[0] - A.arm.a[0], A.paw.c[1] - A.arm.a[1], 0]);
     return [
-      { name: 'paw' + N, bone: B['arm' + N], p: add(mirror(A.paw.c, s), armDir, A.paw.r[0] * 0.9) },
+      // quad gait: the front paw is a foot, so its tip is the sole
+      { name: 'paw' + N, bone: B['arm' + N], p: cfg.run.quad ? add(mirror(A.paw.c, s), [A.paw.r[0] * 0.3, -A.paw.r[1], 0]) : add(mirror(A.paw.c, s), armDir, A.paw.r[0] * 0.9) },
       { name: 'foot' + N, bone: B['leg' + N], p: add(mirror(A.foot.c, s), [A.foot.r[0] * 0.3, -A.foot.r[1], 0]) },
     ];
   });
@@ -354,8 +355,10 @@ function makeShader(cfg, anat) {
  * @param {object|string} character config from characters.js, or its id
  * @returns {{core: Layer, fur: Layer, depth?: Layer, counts: object, id: string}}
  */
-export function buildHamster(character = 'orange', { depthCloud = false, seed = 7 } = {}) {
-  const cfg = typeof character === 'string' ? CHARACTERS[character] : character;
+export function buildHamster(character = 'orange', { depthCloud = false, seed = 7, override = null } = {}) {
+  const base = typeof character === 'string' ? CHARACTERS[character] : character;
+  // override (texture lab): deep-merged over the config, e.g. no fur haze or a different dot spacing
+  const cfg = override ? deepMerge(JSON.parse(JSON.stringify(base)), override) : base;
   const anat = makeAnatomy(cfg);
   const F = makeField(anat);
   const shade = makeShader(cfg, anat);
@@ -587,7 +590,15 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
   return out;
 }
 
-function pack(list, sizeOf, tOf, flagOf, seedOf, alphaOf) {
+function deepMerge(a, b) {
+  for (const [k, v] of Object.entries(b)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && a[k] && typeof a[k] === 'object') deepMerge(a[k], v);
+    else a[k] = v;
+  }
+  return a;
+}
+
+export function pack(list, sizeOf, tOf, flagOf, seedOf, alphaOf) {
   const n = list.length;
   const L = {
     count: n,
@@ -712,13 +723,31 @@ function poseV3(t, run, out, cfg, contact) {
     // fold on the forward recovery, cartoon-stretch on the push back (the foot kicks out behind)
     const fold = 1 - run * M.legFold * rec + run * (M.legStretch || 0) * Math.max(0, -sn);
     // keep the sole near the ground line: rigid-arc compensation minus the stretch's extra reach
-    const drop = legLen * (1 - Math.cos(ang)) - legLen * Math.max(0, fold - 1) * Math.cos(ang);
+    const th0L = M.quad ? Math.atan2(legAxis[0], -legAxis[1]) : 0; // quad: true rest angle (V3/V4 keep 0)
+    const drop = legLen * (Math.cos(th0L) - Math.cos(th0L + ang)) - legLen * Math.max(0, fold - 1) * Math.cos(ang);
     rot[bone] = about(PV[bone], mul(R(0, 0, ang), stretch(legAxis, fold)), [run * 0.03 * sn, run * M.legLift * rec - drop, 0]);
   }
   // arms: opposite to the same-side leg
   const armAxis = norm([an.paw.c[0] - an.arm.a[0], an.paw.c[1] - an.arm.a[1], 0]);
   const G = contact && M.contact ? M.contact : M;
-  for (const [bone, off] of [[B.armN, Math.PI], [B.armF, 0]]) {
+  if (M.quad) {
+    // quad gait (texture lab): the front legs run on the ground like the hind legs, diagonal pairs
+    // (near front with far hind), with the swing scaled so the paws move at the same ground speed
+    // as the feet: no sliding between front and back
+    const armLen = Math.hypot(an.paw.c[0] - an.arm.a[0], an.paw.c[1] - an.arm.a[1]) + an.paw.r[1];
+    const amp = (M.legAmp * legLen) / armLen;
+    for (const [bone, off] of [[B.armN, Math.PI + M.quad], [B.armF, M.quad]]) {
+      const sn = Math.sin(ph + off), cs = Math.cos(ph + off);
+      const ang = run * (M.legBase * 0.5 + amp * sn);
+      const rec = Math.max(0, cs);
+      const fold = 1 - run * M.legFold * rec;
+      // keep the sole on the ground line: the arm leans forward at rest (th0), so compensate the
+      // arc of the real angle, not of a vertical limb
+      const th0 = Math.atan2(armAxis[0], -armAxis[1]);
+      const drop = armLen * (Math.cos(th0) - Math.cos(th0 + ang));
+      rot[bone] = about(PV[bone], mul(R(0, 0, ang), stretch(armAxis, fold)), [run * 0.02 * sn, run * M.legLift * rec - drop, 0]);
+    }
+  } else for (const [bone, off] of [[B.armN, Math.PI], [B.armF, 0]]) {
     const sn = Math.sin(ph + off + (G.armPhase || 0));
     const reach = smooth01(0.5 + 0.5 * sn);
     const ang = run * (G.armBase + G.armAmp * (reach * 2 - 1)) + (1 - run) * 0.1;

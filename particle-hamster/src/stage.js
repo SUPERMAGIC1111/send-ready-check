@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { animate } from 'motion';
 import { ParticleHamster } from './ParticleHamster.js';
 import { ParticleOrb } from './ParticleOrb.js';
+import { VoxelHamster } from './VoxelHamster.js';
+import { BrainMesh } from './BrainMesh.js';
 import { AsciiPass } from './asciiPass.js';
 import { Orbit } from './orbit.js';
 import { CHARACTERS } from './characters.js';
@@ -48,9 +50,10 @@ export class HamsterStage {
 
   /**
    * @param {THREE.WebGLRenderer} renderer shared renderer
-   * @param {{character: string, orb?: boolean, reducedMotion?: boolean, time?: number}} opts
+   * @param {{character: string, orb?: boolean, reducedMotion?: boolean, time?: number, variant?: object}} opts
+   *   variant: texture-lab entry from labVariants.js ({render, build, brain}); omitted = V4 dots
    */
-  constructor(renderer, { character = 'orange', orb = false, wheel = false, reducedMotion = false, time = 0 } = {}) {
+  constructor(renderer, { character = 'orange', orb = false, wheel = false, reducedMotion = false, time = 0, variant = null } = {}) {
     this.renderer = renderer;
     this.character = character;
     this.reducedMotion = reducedMotion;
@@ -89,11 +92,30 @@ export class HamsterStage {
     this.intro = { v: reducedMotion ? 1 : 0 };
     this.hamster = null;
     this.size = { w: 0, h: 0, dpr: 1 };
-    this.ready = loadHamster(character).then((layers) => {
-      this.hamster = new ParticleHamster(layers, character);
+    this.ready = this.setVariant(character, variant);
+  }
+
+  /**
+   * Swap the character / render technique in place (texture lab). The orb, camera, orbit and run
+   * clock stay; the previous character's GPU buffers are released once the new one is ready.
+   * Resolves to this stage; a superseded request resolves without touching the scene.
+   */
+  setVariant(character, variant = null) {
+    const token = (this._token = (this._token || 0) + 1);
+    return loadHamster(character, variant?.build).then((layers) => {
+      if (token !== this._token || this.disposed) return this;
+      this.hamster?.dispose();
+      this.character = character;
+      this.variant = variant;
+      const render = variant?.render || 'dots';
+      this.hamster =
+        render === 'voxel' ? new VoxelHamster(layers.voxel, character)
+        : render === 'mesh' ? new BrainMesh(layers.field)
+        : new ParticleHamster(layers, character, { sculpt: render === 'sculpt' });
       this.hamster.setSolid(this.mode === 'ascii');
       if (this.wheelMode) {
-        this._placeInWheel(layers);
+        if (variant?.brain) this._placeBrain();
+        else this._placeInWheel(layers);
         this.rig.add(this.hamster);
       } else {
         if (this.contactMode) {
@@ -106,6 +128,22 @@ export class HamsterStage {
       if (this.intro.v < 1) animate(this.intro, { v: 1 }, { duration: 1.4, ease: [0.22, 1, 0.36, 1] });
       return this;
     });
+  }
+
+  /**
+   * The Brain floats in the centre of the wheel, about half its inner diameter wide (clearly smaller
+   * than the sphere), and the wheel stands still: nobody is running in it.
+   */
+  _placeBrain() {
+    const Rin = this.orb.style.radius * 0.96, W = 2.45; // brain + eyes, widest extent (model units)
+    const k = (0.48 * 2 * Rin) / W;
+    this.wheelScale = k;
+    this.rig.scale.setScalar(k);
+    this.rig.position.set(0, 0.02, 0);
+    this.hamster.setSizeK(k);
+    this.wheelOmega = 0;
+    this.wheelRin = Rin;
+    this.wheelHeightFraction = (2.0 * k) / (2 * Rin);
   }
 
   /**
@@ -196,7 +234,8 @@ export class HamsterStage {
       this.time += dt;
       this.orbTime += this.reducedMotion ? 0 : dt;
     }
-    this.hamster?.update(this.time, { run: this.runBlend.v, assemble: this.intro.v });
+    // the brain has no legs: it never runs, whatever the Run button says
+    this.hamster?.update(this.time, { run: this.variant?.brain ? 0 : this.runBlend.v, assemble: this.intro.v });
     if (this.wheelMode) {
       // the wheel turns in response to running: clockwise (negative Z) so its inner surface moves
       // backwards under a hamster who runs to the right
@@ -240,6 +279,7 @@ export class HamsterStage {
   }
 
   dispose() {
+    this.disposed = true;
     this.hamster?.dispose();
     this.orb?.dispose();
     this.ascii.dispose();

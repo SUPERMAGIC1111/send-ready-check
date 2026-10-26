@@ -147,4 +147,53 @@ peachy.fur = {
 peachy.run = sprint({ period: 0.3, bounce: 0.11, lean: -0.1, squash: 0.08, legAmp: 0.85, cheekJiggle: 0.09, expression: 'surprise', glance: 0.1 });
 peachy.orb = 'gold';
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy };
+// --- texture lab: one shared hamster body for every texture experiment. Speedy Orange on four
+// real legs: the front paws are feet that reach the running surface (quad gait), body leans a
+// little forward, the run is the same 3.6 strides/s.
+const lab = clone(orange);
+Object.assign(lab, { id: 'orangeLab', name: 'Lab Orange' });
+Object.assign(lab.anatomy, {
+  arm: { a: [0.56, -0.58, 0.4], b: [0.72, -1.3, 0.38], r1: 0.15, r2: 0.11 },
+  paw: { c: [0.8, -1.52, 0.38], r: [0.22, 0.085, 0.13] },
+  leg: { a: [-0.42, -0.78, 0.46], b: [-0.38, -1.4, 0.48], r1: 0.23, r2: 0.12 },
+  foot: { c: [-0.2, -1.52, 0.48], r: [0.3, 0.085, 0.15] },
+});
+// white only on cheek fronts, tiny muzzle and a small chest patch
+lab.regions = { ...lab.regions, cheekCream: 0.12, cheekSide: 0.8, chinZ: 0.18, chin: 0.46, belly: [-0.6, 0.3, 0.4, 0.24] };
+lab.run = sprint({ quad: Math.PI / 2, lean: -0.05, legAmp: 0.75, legFold: 0.25, legStretch: 0, legLift: 0.06, bounce: 0.06 });
+
+// --- Purple Rocket: the same young runner body in soft lilac with pink nose, ears and feet,
+// pale-lavender cheeks and a tiny muzzle, wide energetic eyes
+const rocket = clone(lab);
+Object.assign(rocket, { id: 'purpleRocket', name: 'Purple Rocket' });
+Object.assign(rocket.palette, {
+  fur: [[0.56, 0.4, 0.8], [0.64, 0.48, 0.86], [0.71, 0.56, 0.9], [0.78, 0.65, 0.94]],
+  furAccent: [0.66, 0.52, 0.88],
+  furHi: [0.86, 0.76, 1.0],
+  furTip: [0.9, 0.82, 1.0],
+  cream: [0.93, 0.89, 1.0],
+  ivory: [0.97, 0.95, 1.0],
+  blush: [1.0, 0.62, 0.78],
+  iris: [0.36, 0.2, 0.5],
+  irisLight: [0.66, 0.46, 0.86],
+  irisRing: [0.14, 0.06, 0.2],
+  eyeRim: [0.2, 0.1, 0.28],
+  brow: [0.24, 0.12, 0.32],
+  browHi: [0.34, 0.2, 0.42],
+});
+Object.assign(rocket.anatomy, { eye: { ...rocket.anatomy.eye, r: 0.22 } });
+rocket.run = sprint({ quad: Math.PI / 2, period: 0.27, lean: -0.06, legAmp: 0.78, legFold: 0.25, legStretch: 0, legLift: 0.06, bounce: 0.07, expression: 'surprise' });
+
+// --- Brain: rig stub so the shared stage/renderer can host the brain experiments. The brain's
+// dots all sit on the body bone (no limbs); the occluder is a body-sized ellipsoid inside the brain.
+const brain = clone(orange);
+Object.assign(brain, { id: 'brain', name: 'Brain' });
+Object.assign(brain.anatomy, {
+  body: { c: [0, 0, 0], r: [0.82, 0.78, 0.96] },
+  belly: { c: [0, 0, 0], r: [0.8, 0.76, 0.94] },
+  head: { c: [0, 0, 0], r: [0.01, 0.01, 0.01], k: 0.1 },
+});
+brain.run = sprint({ bounce: 0, squash: 0 });
+brain.brain = true;
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, brain };

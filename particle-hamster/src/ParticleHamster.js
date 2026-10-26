@@ -228,9 +228,11 @@ export class ParticleHamster extends THREE.Group {
    * @param {{core: object, fur: object}} layers output of buildHamster()
    * @param {string} character id in characters.js (drives the pose personality and occluder)
    */
-  constructor(layers, character = layers.id || 'orange') {
+  /** @param {{sculpt?: boolean}} [opts] sculpt: dense dot sculpture (opaque everywhere, no glow halo) */
+  constructor(layers, character = layers.id || 'orange', { sculpt = false } = {}) {
     super();
     this.name = 'ParticleHamster';
+    this.sculpt = sculpt;
     this.character = CHARACTERS[character];
     this.contact = false; // V3 inside an orb: paws press the inner shell
     this._boneData = new Float32Array(BONE_COUNT * 16);
@@ -267,9 +269,9 @@ export class ParticleHamster extends THREE.Group {
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
         defines: fur ? { FUR: '' } : {},
-        transparent: fur,
-        depthWrite: !fur,
-        alphaToCoverage: !fur,
+        transparent: fur && !sculpt,
+        depthWrite: !fur || sculpt,
+        alphaToCoverage: !fur || sculpt,
       });
     this._coreMat = dotMaterial(false);
     this._furMat = dotMaterial(true);
@@ -291,6 +293,10 @@ export class ParticleHamster extends THREE.Group {
     this.fur.renderOrder = 2;
     this.core.frustumCulled = this.fur.frustumCulled = this.glow.frustumCulled = false;
 
+    if (sculpt) this.glow.visible = false; // no soft halo: the surface is the dots
+    // dense opaque, depth-writing dots hide what is behind them by themselves; the inner occluder
+    // was fitted to the V3/V4 bodies and clips the lab body's coat into black specks
+    if (sculpt) this.occluder.visible = false;
     this.add(this.occluder, this.glow, this.core, this.fur);
     this.particleCount = layers.core.count + layers.fur.count;
     this.update(0, { run: 1 });
@@ -317,11 +323,13 @@ export class ParticleHamster extends THREE.Group {
     this.uniforms.uSolid.value = on ? 1 : 0;
     this.uniforms.uDotScale.value = on ? ASCII.solidDotScale : 1;
     this._furMat.blending = on ? THREE.NoBlending : THREE.NormalBlending;
-    this._furMat.transparent = !on;
-    this._furMat.depthWrite = on;
+    this._furMat.transparent = !on && !this.sculpt;
+    this._furMat.depthWrite = on || this.sculpt;
+    this._furMat.alphaToCoverage = !on && this.sculpt;
+    this._furMat.needsUpdate = true;
     this._coreMat.alphaToCoverage = !on;
     this._coreMat.needsUpdate = true;
-    this.glow.visible = !on;
+    this.glow.visible = !on && !this.sculpt;
   }
 
   /** @param {number} t seconds; run 0..1 blends idle -> run; assemble 0..1 for the intro */

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SHADERS } from '../src/ParticleHamster.js';
 import { ORB_SHADERS } from '../src/ParticleOrb.js';
+import { VOXEL_SHADERS } from '../src/VoxelHamster.js';
 
 const VPRE = `#version 300 es
 precision highp float; precision highp int;
@@ -33,6 +34,8 @@ const jobs = [
   ['occluder.vert', VPRE + SHADERS.OCCLUDER_VERTEX],
   ['orb.vert', VPRE + ORB_SHADERS.VERTEX],
   ['orb.frag', FPRE + ORB_SHADERS.FRAGMENT],
+  ['voxel.vert', VPRE + VOXEL_SHADERS.VERTEX],
+  ['voxel.frag', FPRE + VOXEL_SHADERS.FRAGMENT],
 ];
 let failed = 0;
 for (const [name, src] of jobs) {

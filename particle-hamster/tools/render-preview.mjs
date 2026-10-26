@@ -2,23 +2,26 @@
 // DOTS: additive soft dots, occluded by a dense depth cloud (stands in for the GPU occluder).
 // ASCII: opaque enlarged dots -> 2x2 samples per cell -> glyph by brightness, tinted by colour,
 // drawn with a built-in 5x7 bitmap font (the browser uses the system monospace font instead).
-// Usage: node tools/render-preview.mjs [outDir]      ONLY=views,run,detail,ascii to subset
+// Usage: node tools/render-preview.mjs [outDir]   CHAR=orange|purple|golden  ONLY=views,run,detail,ascii
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { buildHamster, poseMatrices, RUN_PERIOD } from '../src/hamsterModel.js';
-import { shadeDot, dotBoost, asciiDotScale, VIEWS, CAMERA, ASCII } from '../src/shading.js';
+import { buildHamster, poseMatrices, runPeriod } from '../src/hamsterModel.js';
+import { shadeDot, asciiDotScale, VIEWS, CAMERA, ASCII } from '../src/shading.js';
+
+const CHAR = process.env.CHAR || 'orange';
+const RUN_PERIOD = runPeriod(CHAR);
 import { encodePNG } from './png.mjs';
 
 const outDir = process.argv[2] || new URL('../captures/', import.meta.url).pathname;
 mkdirSync(outDir, { recursive: true });
 
 const t0 = Date.now();
-const model = buildHamster({ depthCloud: true });
+const model = buildHamster(CHAR, { depthCloud: true });
 console.log(`built ${model.counts.core} surface dots + ${model.counts.fur} fluff dots in ${Date.now() - t0}ms`);
 
 function makeProjector({ yaw, pitch, time, run, W, H, zoom, center }) {
   const f = (H / (2 * Math.tan((CAMERA.fov * Math.PI) / 360))) * zoom;
   const D = CAMERA.distance;
-  const bones = poseMatrices(time, run);
+  const bones = poseMatrices(time, run, undefined, CHAR);
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
   const rot = (x, y, z) => {
     const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
@@ -72,22 +75,27 @@ function renderDots({ yaw, pitch = CAMERA.pitch, time = 0, run = 1, size = 520, 
   const project = makeProjector({ yaw, pitch, time, run, W, H, zoom, center });
   const zb = depthBuffer(project, W, H);
   const col = new Float32Array(W * H * 3);
+  const dz = new Float32Array(W * H).fill(Infinity); // surface dots are opaque and depth-tested, as on the GPU
   for (const [L, isFur] of [[model.core, false], [model.fur, true]]) {
     for (let i = 0; i < L.count; i++) {
       const pr = project(L, i, isFur);
       const cx = Math.min(W - 1, Math.max(0, Math.round(pr.sx))), cyy = Math.min(H - 1, Math.max(0, Math.round(pr.sy)));
       if (!process.env.NO_OCC && pr.depth > zb[cyy * W + cx] + 0.06) continue; // hidden behind the body
       const rest = [L.position[i * 3], L.position[i * 3 + 1], L.position[i * 3 + 2]];
-      const rgb = shadeDot([L.color[i * 3], L.color[i * 3 + 1], L.color[i * 3 + 2]], pr.n, rest, L.kind[i], L.flag[i], L.seed[i], time, isFur, pr.depth);
-      const r = Math.max(1.2 * SS, (L.size[i] * dotBoost(pr.n) * pr.f) / pr.depth / 2);
+      const rgb = shadeDot([L.color[i * 3], L.color[i * 3 + 1], L.color[i * 3 + 2]], pr.n, rest, L.kind[i], L.flag[i], L.seed[i], time, isFur, pr.depth, L.strandT[i]);
+      const r = Math.max(0.6 * SS, (L.size[i] * pr.f) / pr.depth / 2);
       for (let y = Math.max(0, Math.floor(pr.sy - r)); y <= Math.min(H - 1, Math.ceil(pr.sy + r)); y++)
         for (let x = Math.max(0, Math.floor(pr.sx - r)); x <= Math.min(W - 1, Math.ceil(pr.sx + r)); x++) {
           const d = Math.hypot(x + 0.5 - pr.sx, y + 0.5 - pr.sy) / r;
           if (d > 1) continue;
-          const t = Math.min(1, Math.max(0, (0.72 - d) / 0.42));
-          const a = L.alpha[i] * (t * t * (3 - 2 * t) + Math.exp(-d * d * 5) * 0.6);
-          const k = (y * W + x) * 3;
-          col[k] += rgb[0] * a; col[k + 1] += rgb[1] * a; col[k + 2] += rgb[2] * a;
+          const t = Math.min(1, Math.max(0, (1 - d) / 0.38));
+          const a = L.alpha[i] * t * t * (3 - 2 * t);
+          const k = y * W + x;
+          if (pr.depth > dz[k]) continue;
+          const shade = 1.04 - 0.1 * d * d;
+          if (!isFur) { if (a < 0.5) continue; dz[k] = pr.depth; }
+          const w = isFur ? a : 1;
+          for (let c = 0; c < 3; c++) col[k * 3 + c] += (Math.min(1, rgb[c] * shade) - col[k * 3 + c]) * w;
         }
     }
   }
@@ -136,8 +144,8 @@ function renderAscii({ yaw, pitch = CAMERA.pitch, time = 0, run = 1, size = 840 
       const ox = Math.min(W - 1, Math.max(0, Math.round(pr.sx))), oy = Math.min(Hs - 1, Math.max(0, Math.round(pr.sy)));
       if (pr.depth > occ[oy * W + ox] + 0.06) continue;
       const rest = [L.position[i * 3], L.position[i * 3 + 1], L.position[i * 3 + 2]];
-      const rgb = shadeDot([L.color[i * 3], L.color[i * 3 + 1], L.color[i * 3 + 2]], pr.n, rest, L.kind[i], L.flag[i], L.seed[i], time, isFur, pr.depth);
-      const r = Math.max(0.5, (L.size[i] * dotBoost(pr.n) * asciiDotScale(L.kind[i]) * pr.f) / pr.depth / 2);
+      const rgb = shadeDot([L.color[i * 3], L.color[i * 3 + 1], L.color[i * 3 + 2]], pr.n, rest, L.kind[i], L.flag[i], L.seed[i], time, isFur, pr.depth, L.strandT[i]);
+      const r = Math.max(0.5, (L.size[i] * asciiDotScale(L.kind[i]) * pr.f) / pr.depth / 2);
       for (let y = Math.max(0, Math.floor(pr.sy - r)); y <= Math.min(Hs - 1, Math.ceil(pr.sy + r)); y++)
         for (let x = Math.max(0, Math.floor(pr.sx - r)); x <= Math.min(W - 1, Math.ceil(pr.sx + r)); x++) {
           if (Math.hypot(x + 0.5 - pr.sx, y + 0.5 - pr.sy) > r) continue;
@@ -197,22 +205,22 @@ const which = process.env.ONLY || 'views,run,detail,ascii';
 if (which.includes('views')) {
   const ims = Object.entries(VIEWS).map(([name, yaw]) => {
     const im = renderDots({ yaw, time: 0.05 });
-    save(`view-${name}`, im);
+    save(`${CHAR}-view-${name}`, im);
     return im;
   });
-  save('sheet-views', sheet(ims.slice(0, 6), 3));
+  save(`${CHAR}-sheet-views`, sheet(ims.slice(0, 6), 3));
 }
 if (which.includes('run')) {
   const ims = [0, 1, 2, 3, 4, 5].map((k) => renderDots({ yaw: VIEWS.side, time: (k / 6) * RUN_PERIOD, size: 360 }));
-  save('sheet-run-cycle', sheet(ims, 3));
+  save(`${CHAR}-sheet-run-cycle`, sheet(ims, 3));
 }
 if (which.includes('detail')) {
-  save('detail-face', renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.4, center: [0.75, 0.2] }));
-  save('detail-body', renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.6, center: [-0.45, -0.35] }));
-  save('detail-ear-paw', renderDots({ yaw: VIEWS['three-quarter'], time: 0.05, zoom: 1.7, center: [0.35, 0.1] }));
+  save(`${CHAR}-detail-face`, renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.4, center: [0.75, 0.2] }));
+  save(`${CHAR}-detail-body`, renderDots({ yaw: VIEWS.side, time: 0.05, zoom: 2.6, center: [-0.45, -0.35] }));
+  save(`${CHAR}-detail-ear-paw`, renderDots({ yaw: VIEWS['three-quarter'], time: 0.05, zoom: 1.7, center: [0.35, 0.1] }));
 }
 if (which.includes('ascii')) {
   // size 1600 with 2x glyphs = the browser's 7x11px cells on an 800px-tall (desktop) viewport
-  for (const v of process.env.ASCII_VIEWS?.split(',') ?? ['side', 'three-quarter', 'front']) save(`ascii-${v}`, renderAscii({ yaw: VIEWS[v], time: 0.05, size: 1600 }));
+  for (const v of process.env.ASCII_VIEWS?.split(',') ?? ['side', 'three-quarter', 'front']) save(`${CHAR}-ascii-${v}`, renderAscii({ yaw: VIEWS[v], time: 0.05, size: 1600 }));
 }
 console.log(`done in ${Date.now() - t0}ms -> ${outDir}`);

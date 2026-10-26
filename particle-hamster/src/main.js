@@ -1,174 +1,92 @@
-// Preview page: one renderer, one rAF loop, drag-to-rotate with inertia, settles back to
-// the hero side pose. DOTS or ASCII render mode.
-// Query params for repeatable captures: ?view=front&t=0.2&paused=1&run=0&mode=ascii
+// Single full-window viewer for one experience. One renderer, one rAF loop.
+// Query params: ?character=orange|purple|golden  &orb=1  &view=side|front|three-quarter|back|profile
+//               &t=0.2&paused=1 (repeatable captures)  &run=0  &mode=ascii  &auto=0
 import * as THREE from 'three';
-import { animate } from 'motion';
-import { ParticleHamster } from './ParticleHamster.js';
-import { AsciiPass } from './asciiPass.js';
-import { CAMERA, VIEWS } from './shading.js';
+import { HamsterStage } from './stage.js';
+import { CHARACTERS } from './characters.js';
+import { VIEWS } from './shading.js';
 
 const canvas = document.getElementById('stage');
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const character = CHARACTERS[params.get('character')] ? params.get('character') : 'orange';
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setClearColor(0x000000, 1);
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 0.1, 50);
-const pivot = new THREE.Group(); // rotation.x = pitch, rotation.y = yaw (Euler XYZ = Rx * Ry)
-pivot.position.y = CAMERA.lookY;
-scene.add(pivot);
-
-let hamster = null;
-let mode = params.get('mode') === 'ascii' ? 'ascii' : 'dots';
-const ascii = new AsciiPass(renderer);
-let running = !reducedMotion && params.get('run') !== '0';
-let paused = params.get('paused') === '1';
-let clockT = Number(params.get('t') || 0);
-const view = { yaw: VIEWS[params.get('view')] ?? VIEWS.side, pitch: CAMERA.pitch, vel: 0, pinned: params.has('view') };
-const runBlend = { v: running ? 1 : 0 };
-const intro = { v: reducedMotion || paused ? 1 : 0 };
-let lastInput = -Infinity;
+const stage = new HamsterStage(renderer, { character, orb: params.get('orb') === '1', reducedMotion, time: Number(params.get('t') || 0) });
+if (params.has('view')) {
+  stage.orbit.yaw = stage.orbit.home.yaw = VIEWS[params.get('view')] ?? VIEWS.side;
+}
+if (params.get('paused') === '1') { stage.paused = true; stage.intro.v = 1; }
+// ?zoom=2.5&focusX=1.0&focusY=0.25: close-up capture of a region (QA)
+if (params.has('zoom')) {
+  const z = Number(params.get('zoom')), fx = Number(params.get('focusX') || 0), fy = Number(params.get('focusY') || 0);
+  stage.ready.then(() => { stage.zoom = { z, fx, fy }; stage._applySize(); });
+}
+if (params.get('run') === '0') stage.setRunning(false);
+if (params.get('auto') === '0' || params.get('paused') === '1') stage.setAutoOrbit(false);
+stage.orbit.attach(canvas);
 
 function resize() {
-  const w = innerWidth, h = innerHeight;
   const dpr = Math.min(devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  // keep ~3.3 world units of hamster in frame on narrow screens too
-  const fit = 1.75 / (Math.tan((CAMERA.fov * Math.PI) / 360) * camera.aspect);
-  camera.position.set(0, 0, Math.max(CAMERA.distance, fit));
-  camera.lookAt(0, 0, 0);
-  camera.updateProjectionMatrix();
-  hamster?.setPointScale(h * dpr, CAMERA.fov, dpr);
-  ascii.setSize(Math.round(w * dpr), Math.round(h * dpr), dpr);
+  renderer.setSize(innerWidth, innerHeight, false);
+  stage.resize(innerWidth, innerHeight, dpr);
 }
 addEventListener('resize', resize);
 resize();
 
-// ---- drag / touch rotation with inertia
-let drag = null;
-canvas.addEventListener('pointerdown', (e) => {
-  canvas.setPointerCapture(e.pointerId);
-  drag = { x: e.clientX, y: e.clientY, t: performance.now() };
-  view.vel = 0;
-  view.pinned = false;
-  view.target = undefined;
-  setPressed(null);
+// ---- minimal controls
+const ui = document.getElementById('ui');
+const press = (sel, on) => document.querySelectorAll(sel).forEach((b) => b.setAttribute('aria-pressed', String(on(b))));
+ui.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.view) {
+    stage.orbit.home.yaw = VIEWS[b.dataset.view];
+    stage.orbit.reset();
+    press('[data-view]', (x) => x === b);
+  }
+  if (b.id === 'run') { stage.setRunning(!stage.running); b.setAttribute('aria-pressed', String(stage.running)); }
+  if (b.id === 'auto') { stage.setAutoOrbit(!stage.orbit.auto); b.setAttribute('aria-pressed', String(stage.orbit.auto)); }
+  if (b.dataset.mode) { stage.setMode(b.dataset.mode); press('[data-mode]', (x) => x.dataset.mode === stage.mode); }
 });
-canvas.addEventListener('pointermove', (e) => {
-  if (!drag) return;
-  const now = performance.now();
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  const k = 4.2 / Math.max(320, Math.min(innerWidth, innerHeight));
-  view.yaw += dx * k;
-  view.pitch = THREE.MathUtils.clamp(view.pitch + dy * k * 0.7, -0.55, 0.8);
-  view.vel = THREE.MathUtils.lerp(view.vel, (dx * k) / Math.max(1, now - drag.t) * 1000, 0.5);
-  drag = { x: e.clientX, y: e.clientY, t: now };
-  lastInput = now;
-});
-const endDrag = () => { drag = null; lastInput = performance.now(); };
-canvas.addEventListener('pointerup', endDrag);
-canvas.addEventListener('pointercancel', endDrag);
-
-// ---- view chips + run toggle
-const chips = [...document.querySelectorAll('#ui [data-view]')];
-const runBtn = document.getElementById('run');
-const modeBtns = [...document.querySelectorAll('#ui [data-mode]')];
-function setMode(m) {
-  mode = m;
-  hamster?.setSolid(m === 'ascii');
-  for (const b of modeBtns) b.setAttribute('aria-pressed', String(b.dataset.mode === m));
-}
-modeBtns.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
-setMode(mode);
-function setPressed(name) {
-  for (const c of chips) c.setAttribute('aria-pressed', String(c.dataset.view === name));
-}
-function goTo(name) {
-  view.pinned = name !== 'side';
-  view.target = VIEWS[name];
-  view.vel = 0;
-  lastInput = -Infinity;
-  setPressed(name);
-}
-chips.forEach((c) => c.addEventListener('click', () => goTo(c.dataset.view)));
-function setRunning(on) {
-  running = on;
-  runBtn.setAttribute('aria-pressed', String(on));
-  animate(runBlend, { v: on ? 1 : 0 }, { duration: reducedMotion ? 0 : 0.6, ease: 'easeInOut' });
-}
-runBtn.addEventListener('click', () => setRunning(!running));
-runBtn.setAttribute('aria-pressed', String(running));
+document.getElementById('run').setAttribute('aria-pressed', String(stage.running));
+document.getElementById('auto').setAttribute('aria-pressed', String(stage.orbit.auto));
+if (params.get('mode') === 'ascii') { stage.setMode('ascii'); press('[data-mode]', (x) => x.dataset.mode === 'ascii'); }
 addEventListener('keydown', (e) => {
-  const i = '123456'.indexOf(e.key);
-  if (i >= 0) goTo(chips[i].dataset.view);
-  if (e.key === ' ') { e.preventDefault(); setRunning(!running); }
-  if (e.key === 'a' || e.key === 'A') setMode(mode === 'ascii' ? 'dots' : 'ascii');
+  if (e.key === ' ') { e.preventDefault(); document.getElementById('run').click(); }
+  if (e.key === 'a' || e.key === 'A') stage.setMode(stage.mode === 'ascii' ? 'dots' : 'ascii');
+  if (e.key === 'r' || e.key === 'R') stage.orbit.reset();
+  if (e.key === 'ArrowLeft') stage.orbit.nudge(-1.2, 0);
+  if (e.key === 'ArrowRight') stage.orbit.nudge(1.2, 0);
+  if (e.key === 'ArrowUp') stage.orbit.nudge(0, -0.8);
+  if (e.key === 'ArrowDown') stage.orbit.nudge(0, 0.8);
 });
-if (params.has('view')) setPressed(params.get('view'));
 
-// ---- loop
+// ---- loop (paused while the tab is hidden)
 let raf = 0, prev = 0;
-const nearest = (target, from) => target + Math.round((from - target) / (Math.PI * 2)) * Math.PI * 2;
 function frame(now) {
   raf = requestAnimationFrame(frame);
   const dt = Math.min(0.05, prev ? (now - prev) / 1000 : 0);
   prev = now;
-  if (!paused) clockT += dt;
-
-  if (!drag) {
-    view.yaw += view.vel * dt;
-    view.vel *= Math.exp(-dt * 3.5);
-    const idle = now - lastInput > 2200 && Math.abs(view.vel) < 0.15;
-    const target = view.target ?? (view.pinned ? null : VIEWS.side);
-    if (target != null && (idle || view.target != null)) {
-      const tgt = nearest(target, view.yaw);
-      const ease = 1 - Math.exp(-dt * (view.target != null ? 5 : 1.8));
-      view.yaw += (tgt - view.yaw) * ease;
-      view.pitch += (CAMERA.pitch - view.pitch) * ease;
-      if (Math.abs(tgt - view.yaw) < 1e-3) { view.yaw = tgt; view.target = view.pinned ? view.target : undefined; }
-    }
-  }
-  pivot.rotation.set(view.pitch, view.yaw, 0);
-  hamster?.update(clockT, { run: runBlend.v, assemble: intro.v });
-  if (mode === 'ascii') ascii.render(scene, camera);
-  else renderer.render(scene, camera);
+  stage.update(dt);
+  stage.render();
 }
-function start() { if (!raf) { prev = 0; raf = requestAnimationFrame(frame); } }
-function stop() { cancelAnimationFrame(raf); raf = 0; }
+const start = () => { if (!raf) { prev = 0; raf = requestAnimationFrame(frame); } };
+const stop = () => { cancelAnimationFrame(raf); raf = 0; };
 document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
-
-// ---- build particles off the main thread (falls back to the main thread if workers are blocked)
-function onLayers(layers) {
-  if (hamster) return;
-  hamster = new ParticleHamster(layers);
-  pivot.add(hamster);
-  hamster.setSolid(mode === 'ascii');
-  resize();
-  status.remove();
-  canvas.dataset.particles = String(hamster.particleCount);
-  if (intro.v < 1) animate(intro, { v: 1 }, { duration: 1.6, ease: [0.22, 1, 0.36, 1] });
-}
-async function buildOnMainThread() {
-  const { buildHamster } = await import('./hamsterModel.js');
-  onLayers(buildHamster());
-}
-try {
-  const worker = new Worker(new URL('./buildWorker.js', import.meta.url), { type: 'module' });
-  worker.onmessage = (e) => { worker.terminate(); onLayers(e.data); };
-  worker.onerror = (e) => { e.preventDefault?.(); worker.terminate(); buildOnMainThread(); };
-  worker.postMessage({});
-} catch {
-  buildOnMainThread();
-}
 if (!document.hidden) start();
+
+window.__stage = stage; // read-only QA hook (tools/browser-test.cjs)
+stage.ready.then(() => {
+  status.remove();
+  canvas.dataset.particles = String(stage.particleCount);
+});
 
 addEventListener('pagehide', () => {
   stop();
-  hamster?.dispose();
-  ascii.dispose();
+  stage.dispose();
   renderer.dispose();
 });

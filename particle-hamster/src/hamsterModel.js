@@ -1,20 +1,11 @@
-// Pure-JS hamster model: implicit (SDF) anatomy, surface + fur particle sampling,
-// a 9-bone rig and the run cycle. No Three.js dependency, so the exact same
-// particle data can be rendered by the WebGL module and by the Node preview tool.
+// Pure-JS hamster model: implicit (SDF) anatomy driven by a character config (see
+// characters.js), dot sampling, fur, a 14-bone rig and the run cycle. No Three.js dependency, so
+// the same dot data can be baked in Node (tools/bake.mjs), rendered headlessly, or built in a
+// worker in the browser.
 //
-// CHARACTER SPEC (from the reference sheets; units: body height ~1.9)
-//   axes      +X = forward (hamster runs right), +Y = up, +Z = near side in the side view
-//   silhouette one round ball, ~1.15 wide : 1 tall; head is the upper-front third and
-//              merges into the body with no neck; chubby low belly; spiky tuft on top
-//   head      centre (0.45, 0.30), r~0.58; muzzle bulges forward to x~1.14, pink nose on tip,
-//              two buck teeth under it
-//   eyes      huge (r 0.19, ~1/3 head height), high on the front-sides of the head, wide set,
-//              white sclera, brown iris, black pupil, two bright highlights, dark brows
-//   ears      round, small, top-back of head (x~0.18, y~0.80), pink inner facing forward
-//   colours   orange back/top/head-sides/ears; cream belly below a diagonal line from cheek to
-//              rear bottom, white cheeks, muzzle and a blaze between the eyes; pink paws/feet/nose
-//   limbs     front paws held at the chest (x~0.85, y~-0.33); short hind legs under the
-//              middle with long pink feet just showing below the fur line; round tail tuft at rear
+// Axes: +X forward (runs to the right), +Y up, +Z = near side in the default side view.
+
+import { CHARACTERS } from './characters.js';
 
 // ---------------------------------------------------------------- math helpers
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -30,6 +21,8 @@ const norm = (v) => {
 };
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const add = (a, b, s = 1) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 function smin(a, b, k) {
   if (k <= 0) return Math.min(a, b);
   const h = Math.max(k - Math.abs(a - b), 0) / k;
@@ -53,7 +46,7 @@ function hash3(x, y, z) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-function noise3(x, y, z) {
+export function noise3(x, y, z) {
   const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
   const xf = x - xi, yf = y - yi, zf = z - zi;
   const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
@@ -66,78 +59,82 @@ function noise3(x, y, z) {
 }
 
 // ---------------------------------------------------------------- rig
-export const BONES = ['body', 'head', 'earN', 'earF', 'armN', 'armF', 'legN', 'legF', 'tail'];
+export const BONES = ['body', 'head', 'earN', 'earF', 'armN', 'armF', 'legN', 'legF', 'tail', 'cheekN', 'cheekF', 'crown', 'eyeN', 'eyeF'];
 const B = Object.fromEntries(BONES.map((n, i) => [n, i]));
-const PARENT = [0, 0, 1, 1, 0, 0, 0, 0, 0];
-const PIVOT = [
-  [-0.1, -0.15, 0],
-  [0.36, 0.06, 0],
-  [0.28, 0.78, 0.38],
-  [0.28, 0.78, -0.38],
-  [0.6, -0.12, 0.36],
-  [0.6, -0.12, -0.36],
-  [-0.3, -0.45, 0.46],
-  [-0.3, -0.45, -0.46],
-  [-0.95, -0.15, 0],
-];
+const PARENT = BONES.map((n) => B[{ head: 'body', earN: 'head', earF: 'head', cheekN: 'head', cheekF: 'head', crown: 'head', eyeN: 'head', eyeF: 'head' }[n] ?? 'body']);
+
+// material kinds -> fur behaviour and shading
+export const KIND = { FUR: 0, WHITE_FUR: 1, SKIN: 2, EYE: 3, FEATURE: 4, MOUTH: 5 };
 
 // ---------------------------------------------------------------- anatomy (SDF primitives)
-// type 'e' = oriented ellipsoid, 'c' = tapered capsule. k = smooth-union radius with the rest.
+// 'e' = oriented ellipsoid, 'c' = tapered capsule. k = smooth-union radius with the rest.
 function ell(name, bone, c, r, k, basis) {
   const [u, v, w] = basis || [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  return { name, bone, type: 'e', c, r, k, u, v, w };
+  return { name, bone: B[bone], type: 'e', c, r, k, u, v, w };
 }
 function cap(name, bone, a, b, r1, r2, k) {
-  return { name, bone, type: 'c', a, b, r1, r2, k };
+  return { name, bone: B[bone], type: 'c', a, b, r1, r2, k };
 }
-function earBasis(side) {
-  const w = norm([0.55, 0.12, 0.82 * side]);
+const mirror = (v, s) => [v[0], v[1], v[2] * s];
+function earBasis(side, facing) {
+  const w = norm([facing[0], facing[1], facing[2] * side]);
   const u = norm(cross([0, 1, 0], w));
   return [u, cross(w, u), w];
 }
+const deg = Math.PI / 180;
 
-// head centre; most face features are placed relative to it
-const HC = [0.52, 0.36, 0];
-const EYE_R = 0.165;
-const EYES = [1, -1].map((s) => {
-  // eyeballs sit ~42deg off the forward axis, 12deg up: the near eye reads fully in the
-  // hero side view, and both eyes still face the viewer in the front view
-  const dir = norm([0.727, 0.208, 0.655 * s]);
-  return {
-    c: [HC[0] + dir[0] * 0.6, HC[1] + dir[1] * 0.6, dir[2] * 0.6],
-    gaze: dir,
-    // pupils look forward (running toward the right)
-    look: norm([0.92, 0.17, 0.38 * s]),
-    side: s,
-  };
-});
-
-const PRIMS = [];
-for (const s of [1, -1]) {
-  const N = s > 0 ? 'N' : 'F';
-  PRIMS.push(
-    ell('cheek' + N, B.head, [0.8, 0.04, 0.36 * s], [0.33, 0.29, 0.29], 0.24),
-    ell('eye' + N, B.head, EYES[s > 0 ? 0 : 1].c, [EYE_R, EYE_R, EYE_R], 0.03),
-    ell('ear' + N, B['ear' + N], [0.28, 0.96, 0.45 * s], [0.22, 0.23, 0.07], 0.05, earBasis(s)),
-    cap('arm' + N, B['arm' + N], [0.6, -0.12, 0.36 * s], [0.8, -0.26, 0.3 * s], 0.11, 0.085, 0.1),
-    ell('paw' + N, B['arm' + N], [0.87, -0.29, 0.28 * s], [0.085, 0.075, 0.085], 0.035),
-    cap('leg' + N, B['leg' + N], [-0.3, -0.45, 0.46 * s], [-0.26, -1.0, 0.48 * s], 0.22, 0.11, 0.1),
-    ell('foot' + N, B['leg' + N], [-0.13, -1.1, 0.48 * s], [0.2, 0.07, 0.105], 0.04),
-    ell('tooth' + N, B.head, [1.27, 0.07, 0.026 * s], [0.02, 0.045, 0.022], 0.006)
-  );
+/** Build the implicit anatomy for one character config. */
+function makeAnatomy(cfg) {
+  const A = cfg.anatomy;
+  const HC = A.head.c;
+  const eyes = [1, -1].map((s) => {
+    const az = A.eye.azim * deg, el = A.eye.elev * deg;
+    const dir = norm([Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az) * s]);
+    return { c: add(HC, dir, A.eye.dist), gaze: dir, look: norm(mirror(A.eye.look, s)), side: s, r: A.eye.r };
+  });
+  const prims = [
+    ell('body', 'body', A.body.c, A.body.r, 0),
+    ell('belly', 'body', A.belly.c, A.belly.r, 0.22),
+    ell('head', 'head', HC, A.head.r, A.head.k),
+    ell('muzzle', 'head', A.muzzle.c, A.muzzle.r, 0.1),
+    ell('nose', 'head', A.nose.c, A.nose.r, 0.02),
+    ell('tail', 'tail', A.tail.c, A.tail.r, 0.06),
+  ];
+  for (const s of [1, -1]) {
+    const N = s > 0 ? 'N' : 'F';
+    prims.push(
+      ell('cheek' + N, 'cheek' + N, mirror(A.cheek.c, s), A.cheek.r, A.cheek.k),
+      ell('eye' + N, 'eye' + N, eyes[s > 0 ? 0 : 1].c, [A.eye.r, A.eye.r, A.eye.r], 0.02),
+      ell('ear' + N, 'ear' + N, mirror(A.ear.c, s), A.ear.r, 0.05, earBasis(s, A.ear.facing)),
+      cap('arm' + N, 'arm' + N, mirror(A.arm.a, s), mirror(A.arm.b, s), A.arm.r1, A.arm.r2, 0.1),
+      ell('paw' + N, 'arm' + N, mirror(A.paw.c, s), A.paw.r, 0.035),
+      cap('leg' + N, 'leg' + N, mirror(A.leg.a, s), mirror(A.leg.b, s), A.leg.r1, A.leg.r2, 0.1),
+      ell('foot' + N, 'leg' + N, mirror(A.foot.c, s), A.foot.r, 0.04),
+      ell('tooth' + N, 'head', mirror(A.tooth.c, s), A.tooth.r, 0.004)
+    );
+  }
+  const mouth = ell('mouth', 'head', A.mouth.c, A.mouth.r, 0);
+  const pivots = BONES.map(() => [0, 0, 0]);
+  pivots[B.body] = [A.body.c[0], A.body.c[1] - A.body.r[1] * 0.9, 0]; // squash from the ground
+  pivots[B.head] = [HC[0] - 0.2, HC[1] - 0.3, 0];
+  pivots[B.tail] = add(A.tail.c, [0.1, 0, 0]);
+  pivots[B.crown] = add(HC, [0, A.head.r[1] * 0.85, 0]);
+  for (const s of [1, -1]) {
+    const N = s > 0 ? 'N' : 'F';
+    pivots[B['ear' + N]] = add(mirror(A.ear.c, s), [0, -A.ear.r[1] * 0.8, -0.05 * s]);
+    pivots[B['arm' + N]] = mirror(A.arm.a, s);
+    pivots[B['leg' + N]] = mirror(A.leg.a, s);
+    pivots[B['cheek' + N]] = mirror(A.cheek.c, s);
+    pivots[B['eye' + N]] = eyes[s > 0 ? 0 : 1].c;
+  }
+  // bounding box of the anatomy (rest pose) with a margin
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  for (const p of prims) {
+    const pts = p.type === 'e' ? [[p.c, Math.max(...p.r)]] : [[p.a, p.r1], [p.b, p.r2]];
+    for (const [c, r] of pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[k] - r); hi[k] = Math.max(hi[k], c[k] + r); }
+  }
+  return { HC, eyes, prims, mouth, pivots, bbox: { min: lo.map((v) => v - 0.05), max: hi.map((v) => v + 0.05) } };
 }
-PRIMS.unshift(
-  ell('body', B.body, [-0.14, -0.13, 0], [0.86, 0.86, 0.9], 0),
-  ell('belly', B.body, [0.08, -0.38, 0], [0.72, 0.56, 0.8], 0.22),
-  ell('head', B.head, HC, [0.68, 0.64, 0.68], 0.12),
-  ell('muzzle', B.head, [1.07, 0.15, 0], [0.21, 0.175, 0.21], 0.1),
-  ell('nose', B.head, [1.275, 0.23, 0], [0.065, 0.052, 0.07], 0.02),
-  ell('tail', B.tail, [-1.04, -0.15, 0], [0.13, 0.11, 0.11], 0.06)
-);
-const P = Object.fromEntries(PRIMS.map((p, i) => [p.name, i]));
-// open, excited running mouth: a cavity carved into the front-bottom of the muzzle
-const MOUTH = ell('mouth', B.head, [1.22, 0.0, 0], [0.15, 0.115, 0.22], 0);
-let _carve = 1e9, _union = 1e9;
 
 function primDist(pr, x, y, z) {
   if (pr.type === 'e') {
@@ -158,357 +155,275 @@ function primDist(pr, x, y, z) {
   return Math.hypot(pax - bax * h, pay - bay * h, paz - baz * h) - mix(pr.r1, pr.r2, h);
 }
 
-const _d = new Float64Array(PRIMS.length);
-// returns the blended distance; per-primitive distances are left in _d
-function sdf(x, y, z) {
-  let d = 1e9, teeth = 1e9;
-  for (let i = 0; i < PRIMS.length; i++) {
-    const di = primDist(PRIMS[i], x, y, z);
-    _d[i] = di;
-    if (PRIMS[i].name.startsWith('tooth')) teeth = Math.min(teeth, di);
-    else d = i === 0 ? di : smin(d, di, PRIMS[i].k);
-  }
-  _union = d;
-  _carve = primDist(MOUTH, x, y, z);
-  // carve the open mouth, then hang the two teeth from its upper lip
-  return Math.min(Math.max(d, -_carve), teeth);
-}
-function gradient(x, y, z) {
-  const e = 0.002;
-  return norm([
-    sdf(x + e, y, z) - sdf(x - e, y, z),
-    sdf(x, y + e, z) - sdf(x, y - e, z),
-    sdf(x, y, z + e) - sdf(x, y, z - e),
-  ]);
-}
-
-// ---------------------------------------------------------------- colours
-const C = {
-  tangerine: [0.97, 0.5, 0.12],
-  amber: [1.0, 0.63, 0.2],
-  toasted: [0.86, 0.4, 0.1],
-  goldenBrown: [0.76, 0.44, 0.15],
-  copper: [0.68, 0.29, 0.08],
-  gold: [1.0, 0.77, 0.36],
-  cream: [1.0, 0.87, 0.7],
-  ivory: [1.0, 0.94, 0.84],
-  creamShade: [0.88, 0.73, 0.56],
-  pink: [1.0, 0.6, 0.64],
-  pinkDeep: [0.92, 0.4, 0.5],
-  sclera: [0.98, 0.97, 0.95],
-  iris: [0.64, 0.37, 0.14],
-  irisDark: [0.42, 0.21, 0.07],
-  pupil: [0.02, 0.015, 0.012],
-  brow: [0.24, 0.11, 0.05],
-  mouth: [0.3, 0.06, 0.06],
-};
-
-// material kinds -> fur behaviour
-export const KIND = { FUR: 0, WHITE_FUR: 1, SKIN: 2, EYE: 3, FEATURE: 4 };
-
-function browDistance(eye, x, y, z) {
-  // brow arc above each eye, measured in the plane facing along the eye's gaze, so it
-  // always lands on the head surface; inner end raised (eager/worried look from the sheets)
-  const side = norm(cross([0, 1, 0], eye.gaze));
-  const up = cross(eye.gaze, side);
-  const v = [x - eye.c[0], y - eye.c[1], z - eye.c[2]];
-  if (dot(v, eye.gaze) < -0.12) return 1e9;
-  const sx = dot(v, side) / EYE_R, sy = dot(v, up) / EYE_R;
-  if (Math.abs(sx) > 1) return 1e9;
-  const inner = sx * eye.side > 0 ? 1 : 0; // toward the face centre
-  const arc = 1.4 + 0.22 * (1 - sx * sx) + 0.25 * Math.abs(sx) * inner;
-  return Math.abs(sy - arc) * EYE_R * (1 + 0.6 * sx * sx);
-}
-
-// returns { col, kind, fur } for a surface point with primitive label `name`
-function shadeRegion(name, p, n, rnd) {
-  const [x, y, z] = p;
-  const jitter = (noise3(x * 9, y * 9, z * 9) - 0.5) * 0.12;
-  const furTone = () => {
-    const t = noise3(x * 4 + 3, y * 4, z * 4), u = noise3(x * 11, y * 11 + 5, z * 11);
-    let c = t < 0.35 ? mix3(C.copper, C.toasted, t / 0.35) : t < 0.7 ? mix3(C.toasted, C.tangerine, (t - 0.35) / 0.35) : mix3(C.tangerine, C.amber, (t - 0.7) / 0.3);
-    c = mix3(c, C.goldenBrown, smoothstep(0.6, 0.95, u) * 0.6);
-    // darker along the spine/back, sunlit gold on the top
-    c = mix3(c, C.copper, smoothstep(0.2, 0.9, -n[0]) * 0.25);
-    c = mix3(c, C.gold, smoothstep(0.55, 1, n[1]) * 0.25 * rnd());
-    return c;
+/** Field evaluator for one anatomy. sdf() leaves per-primitive distances in .d */
+function makeField(anat) {
+  const { prims, mouth } = anat;
+  const d = new Float64Array(prims.length);
+  const isTooth = prims.map((p) => p.name.startsWith('tooth'));
+  const state = { d, carve: 1e9, union: 1e9 };
+  state.sdf = (x, y, z) => {
+    let u = 1e9, teeth = 1e9;
+    for (let i = 0; i < prims.length; i++) {
+      const di = primDist(prims[i], x, y, z);
+      d[i] = di;
+      if (isTooth[i]) teeth = Math.min(teeth, di);
+      else u = i === 0 ? di : smin(u, di, prims[i].k);
+    }
+    state.union = u;
+    state.carve = primDist(mouth, x, y, z);
+    // carve the open mouth, then hang the two little teeth from its upper lip
+    return Math.min(Math.max(u, -state.carve), teeth);
   };
-  const whiteTone = () => mix3(C.ivory, C.cream, noise3(x * 5, y * 5, z * 5 + 7));
-  const orange = { col: furTone(), kind: KIND.FUR, fur: 1 };
-  const white = (len = 0.9) => ({ col: whiteTone(), kind: KIND.WHITE_FUR, fur: len });
-
-  if (name.startsWith('eye')) {
-    const eye = EYES[name === 'eyeN' ? 0 : 1];
-    const dir = norm([x - eye.c[0], y - eye.c[1], z - eye.c[2]]);
-    const cl = dot(dir, eye.look);
-    // two catch-lights, up and toward the light (front-upper)
-    const h1 = dot(dir, norm([eye.look[0] - 0.25, eye.look[1] + 0.45, eye.look[2] + 0.1 * eye.side]));
-    const h2 = dot(dir, norm([eye.look[0] + 0.15, eye.look[1] - 0.32, eye.look[2] - 0.15 * eye.side]));
-    if (h1 > 0.985 || h2 > 0.996) return { col: [1, 1, 1], kind: KIND.EYE, fur: 0, glow: 1 };
-    if (cl > 0.92) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
-    if (cl > 0.76) return { col: mix3(C.irisDark, C.iris, smoothstep(0.92, 0.8, cl) * (0.7 + 0.3 * dir[1])), kind: KIND.EYE, fur: 0 };
-    if (cl > 0.74) return { col: C.irisDark, kind: KIND.EYE, fur: 0 };
-    return { col: mix3(C.sclera, [0.85, 0.82, 0.8], smoothstep(0.2, -0.4, cl)), kind: KIND.EYE, fur: 0 };
-  }
-  if (name === 'mouth') {
-    // inside of the open mouth: pink tongue at the bottom, the rest is dark (left empty)
-    if (y < MOUTH.c[1] - 0.02 && Math.abs(z) < 0.15) return { col: mix3(C.pink, C.pinkDeep, 0.35), kind: KIND.SKIN, fur: 0 };
-    return { col: C.mouth, kind: KIND.FEATURE, fur: 0 };
-  }
-  if (name === 'nose') return { col: mix3(C.pink, C.pinkDeep, smoothstep(0.3, -0.5, n[1])), kind: KIND.FEATURE, fur: 0 };
-  if (name.startsWith('tooth')) return { col: C.ivory, kind: KIND.FEATURE, fur: 0 };
-  if (name.startsWith('paw') || name.startsWith('foot')) {
-    const toe = noise3(x * 30, y * 30, z * 30) > 0.62;
-    return { col: toe ? C.pinkDeep : mix3(C.pink, [1, 0.74, 0.74], rnd() * 0.5), kind: KIND.SKIN, fur: 0 };
-  }
-  if (name.startsWith('ear')) {
-    const pr = PRIMS[P[name]];
-    const dx = x - pr.c[0], dy = y - pr.c[1], dz = z - pr.c[2];
-    const lu = (dx * pr.u[0] + dy * pr.u[1] + dz * pr.u[2]) / pr.r[0];
-    const lv = (dx * pr.v[0] + dy * pr.v[1] + dz * pr.v[2]) / pr.r[1];
-    const lw = dx * pr.w[0] + dy * pr.w[1] + dz * pr.w[2];
-    if (lw > 0 && Math.hypot(lu, lv + 0.08) < 0.74)
-      return { col: mix3(C.pink, C.pinkDeep, smoothstep(0.7, 0.1, Math.hypot(lu, lv))), kind: KIND.SKIN, fur: 0 };
-    return { col: furTone(), kind: KIND.FUR, fur: 0.35 };
-  }
-
-  // brows sit on top of everything around the eyes
-  for (const eye of EYES) {
-    if (browDistance(eye, x, y, z) < 0.03 && dot(n, eye.gaze) > -0.2) return { col: C.brow, kind: KIND.FEATURE, fur: 0 };
-  }
-
-  if (name === 'muzzle') return white(0.3);
-  // puffy cheeks: cream in front, orange toward the back, long fluff
-  if (name.startsWith('cheek')) return n[0] > -0.1 + jitter ? white(1.5) : { ...orange, fur: 1.5 };
-  if (name === 'head') {
-    // narrow cream blaze between the eyes down to the muzzle, cream chin; orange everywhere else
-    const blaze = Math.abs(z) < 0.06 + 0.2 * smoothstep(0.5, 0.12, y) + jitter * 0.4 && n[0] > 0.3 && y < 0.7;
-    if (blaze || (y < 0.06 + jitter && x > 0.6)) return white(0.6);
-    // spiky crown tuft on top of the head
-    return { ...orange, fur: n[1] > 0.55 ? 2.2 : 1.0 };
-  }
-  if (name === 'body' || name === 'belly') {
-    // cream belly: underside plus a front-bottom oval; the back, sides and rump stay orange
-    const belly = n[1] < -0.62 || (y < -0.05 + 0.3 * (x - 0.55) + jitter && Math.abs(z) < 0.5 + jitter && x > -0.3);
-    if (belly) return white(1.25);
-    const rump = smoothstep(-0.4, -0.8, x), shoulder = smoothstep(0.1, 0.4, x) * smoothstep(0.4, 0.6, Math.abs(z));
-    return { ...orange, fur: 1.0 + 0.3 * rump + 0.25 * shoulder };
-  }
-  if (name.startsWith('arm')) return { ...orange, fur: 0.6 };
-  if (name.startsWith('leg')) return { ...orange, fur: 0.75 };
-  if (name === 'tail') return { ...orange, fur: 1.0 };
-  return orange;
+  state.gradient = (x, y, z) => {
+    const e = 0.002, f = state.sdf;
+    return norm([f(x + e, y, z) - f(x - e, y, z), f(x, y + e, z) - f(x, y - e, z), f(x, y, z + e) - f(x, y, z - e)]);
+  };
+  state.label = () => {
+    let best = 0;
+    for (let i = 1; i < prims.length; i++) if (d[i] < d[best]) best = i;
+    return best;
+  };
+  return state;
 }
 
-// ---------------------------------------------------------------- sampling
-const BBOX = { min: [-1.2, -1.22, -1.08], max: [1.42, 1.25, 1.08] };
+// ---------------------------------------------------------------- colour regions
+function makeShader(cfg, anat) {
+  const C = cfg.palette, R = cfg.regions;
+  const { HC, eyes, mouth } = anat;
+  const P = Object.fromEntries(anat.prims.map((p, i) => [p.name, p]));
+  return (name, p, n, rnd) => {
+    const [x, y, z] = p;
+    const jitter = (noise3(x * 9, y * 9, z * 9) - 0.5) * 0.12;
+    const furTone = () => {
+      const t = noise3(x * 4 + 3, y * 4, z * 4), u = noise3(x * 11, y * 11 + 5, z * 11);
+      const [a, b, c, d] = C.fur;
+      let col = t < 0.35 ? mix3(a, b, t / 0.35) : t < 0.7 ? mix3(b, c, (t - 0.35) / 0.35) : mix3(c, d, (t - 0.7) / 0.3);
+      col = mix3(col, C.furAccent, smoothstep(0.6, 0.95, u) * 0.5);
+      // sunlit top, slightly deeper toward the rump
+      col = mix3(col, C.furHi, smoothstep(0.5, 1, n[1]) * 0.35);
+      col = mix3(col, C.fur[0], smoothstep(0.3, 0.9, -n[0]) * 0.2);
+      return col;
+    };
+    const creamTone = () => mix3(C.ivory, C.cream, noise3(x * 5, y * 5, z * 5 + 7));
+    const orange = (fur = 1) => ({ col: furTone(), kind: KIND.FUR, fur });
+    const cream = (fur = 1) => ({ col: creamTone(), kind: KIND.WHITE_FUR, fur });
 
-function buildBandCells(res) {
+    if (name === 'mouth') {
+      // inside of the open smile: pink tongue in the lower part, warm rose above (never black)
+      if (y < mouth.c[1] - mouth.r[1] * 0.15) return { col: C.tongue, kind: KIND.MOUTH, fur: 0 };
+      return { col: C.mouthIn, kind: KIND.MOUTH, fur: 0 };
+    }
+    if (name.startsWith('eye')) {
+      const eye = eyes[name === 'eyeN' ? 0 : 1];
+      const dir = norm([x - eye.c[0], y - eye.c[1], z - eye.c[2]]);
+      const cl = dot(dir, eye.look);
+      // glossy bead eye: dark iris filling the visible cap, warmer toward the bottom, big catch-light
+      const h1 = dot(dir, norm([eye.look[0] - 0.2, eye.look[1] + 0.55, eye.look[2] + 0.05 * eye.side]));
+      const h2 = dot(dir, norm([eye.look[0] + 0.25, eye.look[1] - 0.35, eye.look[2] - 0.1 * eye.side]));
+      if (h1 > cfg.eye.catch1 || h2 > cfg.eye.catch2) return { col: [1, 1, 1], kind: KIND.EYE, fur: 0, glow: 1 };
+      if (cl > 0.86) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
+      if (cl > cfg.eye.irisCos) return { col: mix3(C.iris, C.irisLight, smoothstep(0.1, -0.6, dot(dir, [0, 1, 0])) * 0.9), kind: KIND.EYE, fur: 0 };
+      return { col: C.sclera, kind: KIND.EYE, fur: 0 };
+    }
+    if (name === 'nose') return { col: mix3(C.pink, C.pinkDeep, smoothstep(0.3, -0.6, n[1]) * 0.6), kind: KIND.SKIN, fur: 0 };
+    if (name.startsWith('tooth')) return { col: C.tooth, kind: KIND.FEATURE, fur: 0 };
+    if (name.startsWith('paw') || name.startsWith('foot')) {
+      const toe = noise3(x * 28, y * 28, z * 28) > 0.64;
+      return { col: toe ? C.pinkDeep : mix3(C.pink, [1, 0.78, 0.78], rnd() * 0.4), kind: KIND.SKIN, fur: 0 };
+    }
+    if (name.startsWith('ear')) {
+      const pr = P[name];
+      const dx = x - pr.c[0], dy = y - pr.c[1], dz = z - pr.c[2];
+      const lu = (dx * pr.u[0] + dy * pr.u[1] + dz * pr.u[2]) / pr.r[0];
+      const lv = (dx * pr.v[0] + dy * pr.v[1] + dz * pr.v[2]) / pr.r[1];
+      const lw = dx * pr.w[0] + dy * pr.w[1] + dz * pr.w[2];
+      if (lw > 0 && Math.hypot(lu, lv + 0.06) < 0.72) return { col: mix3(C.pink, C.earInner, smoothstep(0.7, 0.1, Math.hypot(lu, lv))), kind: KIND.SKIN, fur: 0 };
+      return orange(0.3);
+    }
+    // soft dark rim around each eye (like the references' lash line) so the bead reads
+    for (const e of eyes) {
+      const de = dist(p, e.c);
+      if (de < e.r + cfg.eye.rim && dot(n, e.gaze) > -0.3) return { col: C.eyeRim, kind: KIND.FEATURE, fur: 0 };
+    }
+    if (name === 'muzzle') return cream(0.25);
+    if (name.startsWith('cheek')) {
+      if (n[0] <= R.cheekCream + jitter) return orange(R.cheekFur);
+      // a soft rosy blush on the front of each puffy cheek
+      const pr = P[name];
+      const bc = [pr.c[0] + pr.r[0] * 0.7, pr.c[1] + pr.r[1] * 0.15, pr.c[2] * 1.05];
+      const blush = smoothstep(0.24, 0.06, dist(p, bc)) * (R.blush || 0);
+      const c = cream(R.cheekFur);
+      return { ...c, col: mix3(c.col, C.blush || C.pink, blush) };
+    }
+    if (name === 'head') {
+      const blaze = Math.abs(z) < R.blaze[0] + R.blaze[1] * smoothstep(HC[1] + 0.15, HC[1] - 0.25, y) + jitter * 0.4 && n[0] > 0.3 && y < HC[1] + R.blaze[2];
+      if (blaze || (y < HC[1] - R.chin + jitter && x > HC[0])) return cream(0.6);
+      return orange(n[1] > 0.6 ? 1.1 : 1.0);
+    }
+    if (name === 'body' || name === 'belly') {
+      const [b0, b1, b2, zMax] = R.belly;
+      const belly = n[1] < -0.62 || (y < b0 + b1 * (x - b2) + jitter && Math.abs(z) < zMax + jitter && x > -0.35);
+      if (belly) return cream(1.1);
+      const rump = smoothstep(-0.4, -0.85, x);
+      return orange(1.0 + 0.25 * rump);
+    }
+    if (name.startsWith('arm')) return orange(0.55);
+    if (name.startsWith('leg')) return orange(0.6);
+    if (name === 'tail') return orange(0.9);
+    return orange();
+  };
+}
+
+// ---------------------------------------------------------------- dot sampling
+/**
+ * Build the dot cloud for a character in the rest pose.
+ * The anatomy surface is densely sampled, then thinned with one random dot per grid cell
+ * (stratified, organic but even), finer on facial features so eyes, nose and smile read.
+ * Fur is a soft fuzzy shell of loose dots plus a few curved crown locks.
+ * @param {object|string} character config from characters.js, or its id
+ * @returns {{core: Layer, fur: Layer, depth?: Layer, counts: object, id: string}}
+ */
+export function buildHamster(character = 'orange', { depthCloud = false, seed = 7 } = {}) {
+  const cfg = typeof character === 'string' ? CHARACTERS[character] : character;
+  const anat = makeAnatomy(cfg);
+  const F = makeField(anat);
+  const shade = makeShader(cfg, anat);
+  const rnd = mulberry32(seed);
+  const D = cfg.dots;
+
+  // near-surface cells to sample from
+  const { min, max } = anat.bbox;
+  const res = [0, 1, 2].map((k) => Math.ceil((max[k] - min[k]) / 0.04));
+  const size = [0, 1, 2].map((k) => (max[k] - min[k]) / res[k]);
   const cells = [];
-  const sx = (BBOX.max[0] - BBOX.min[0]) / res[0];
-  const sy = (BBOX.max[1] - BBOX.min[1]) / res[1];
-  const sz = (BBOX.max[2] - BBOX.min[2]) / res[2];
-  const diag = Math.hypot(sx, sy, sz);
+  const diag = Math.hypot(...size);
   for (let i = 0; i < res[0]; i++)
     for (let j = 0; j < res[1]; j++)
       for (let k = 0; k < res[2]; k++) {
-        const x = BBOX.min[0] + (i + 0.5) * sx, y = BBOX.min[1] + (j + 0.5) * sy, z = BBOX.min[2] + (k + 0.5) * sz;
-        if (Math.abs(sdf(x, y, z)) < diag * 0.75) cells.push(x - sx / 2, y - sy / 2, z - sz / 2);
+        const x = min[0] + (i + 0.5) * size[0], y = min[1] + (j + 0.5) * size[1], z = min[2] + (k + 0.5) * size[2];
+        if (Math.abs(F.sdf(x, y, z)) < diag * 0.75) cells.push(x - size[0] / 2, y - size[1] / 2, z - size[2] / 2);
       }
-  return { cells, size: [sx, sy, sz] };
-}
-
-function labelAt() {
-  let best = 0;
-  for (let i = 1; i < PRIMS.length; i++) if (_d[i] < _d[best]) best = i;
-  return best;
-}
-
-// skin weight between a primitive's bone and its parent bone
-function skin(label) {
-  const bone = PRIMS[label].bone;
-  if (bone === 0) return [0, 0, 0];
-  const parent = PARENT[bone];
-  let dSelf = 1e9, dPar = 1e9;
-  for (let i = 0; i < PRIMS.length; i++) {
-    if (PRIMS[i].bone === bone) dSelf = Math.min(dSelf, _d[i]);
-    else if (PRIMS[i].bone === parent) dPar = Math.min(dPar, _d[i]);
-  }
-  const band = bone === B.head ? 0.22 : 0.09;
-  return [parent, bone, smoothstep(-band * 0.5, band, dPar - dSelf)];
-}
-
-/**
- * Build the dot cloud in the rest pose.
- * The anatomy surface is densely sampled, then thinned into evenly spaced (Poisson-disc) dots, the
- * way the Motion.dev sphere is made of separate points. Spacing is tighter on the facial
- * features so eyes, brows and nose read. Pupils are left empty (black) apart from their
- * catch-lights. Sparse fluff dots and dotted spikes (crown tuft) make the outline irregular.
- * @returns {{core: Layer, fur: Layer, depth?: Layer, counts: object}}
- * Layer = { count, position, normal, color, size, boneA, boneB, weight, kind, strandT, flag, seed, alpha }
- */
-export function buildHamster({
-  candidates = 90000,
-  spacing = 0.036,
-  faceSpacing = 0.025,
-  featureSpacing = 0.0185,
-  fluff = 1500,
-  tuftSpikes = 120,
-  seed = 7,
-  depthCloud = false,
-} = {}) {
-  const rnd = mulberry32(seed);
-  const { cells, size } = buildBandCells([66, 58, 52]);
   const nCells = cells.length / 3;
 
-  const cand = [];
-  const tryPoint = (x, y, z, faceOnly) => {
-    let d = sdf(x, y, z);
-    if (Math.abs(d) > 0.02) return false;
-    // project onto the surface (two Newton steps)
-    for (let it = 0; it < 2; it++) {
-      const g = gradient(x, y, z);
-      x -= g[0] * d; y -= g[1] * d; z -= g[2] * d;
-      d = sdf(x, y, z);
-    }
-    let label = labelAt();
-    let name = PRIMS[label].name;
-    if (!name.startsWith('tooth') && -_carve > _union - 0.004) { label = P.head; name = 'mouth'; }
-    if (faceOnly && !(x > 0.6 && y > -0.1 && name !== 'body')) return false;
-    const n = gradient(x, y, z);
-    sdf(x, y, z); // refresh _d for skinning at final point
-    const [boneA, boneB, w] = skin(label);
-    const reg = shadeRegion(name, [x, y, z], n, rnd);
-    cand.push({ p: [x, y, z], n, col: reg.col, kind: reg.kind, fur: reg.fur, glow: reg.glow || 0, boneA, boneB, w, name });
-    return true;
+  const eyeRimR = Math.max(...anat.eyes.map((e) => e.r)) + cfg.eye.rim + 0.06;
+  const isFace = (p, boneB) => boneB === B.head || boneB === B.cheekN || boneB === B.cheekF || boneB === B.eyeN || boneB === B.eyeF
+    ? p[0] > anat.HC[0] + 0.1 && p[1] > anat.HC[1] - 0.55 : false;
+  const spacingOf = (pt) => {
+    if (pt.kind === KIND.EYE || pt.kind === KIND.FEATURE || pt.kind === KIND.MOUTH || pt.name === 'nose') return D.feature;
+    if (pt.kind === KIND.SKIN) return D.skin;
+    if (isFace(pt.p, pt.boneB) || anat.eyes.some((e) => dist(pt.p, e.c) < eyeRimR)) return D.face;
+    return D.body;
   };
-  const sample = (target, faceOnly) => {
-    let got = 0, guard = 0;
-    while (got < target && guard++ < target * 40) {
-      const c = Math.floor(rnd() * nCells) * 3;
-      const x = cells[c] + rnd() * size[0], y = cells[c + 1] + rnd() * size[1], z = cells[c + 2] + rnd() * size[2];
-      if (faceOnly && (x < 0.55 || y < -0.12)) continue;
-      if (tryPoint(x, y, z, faceOnly)) got++;
-    }
-  };
-  sample(candidates, false);
-  sample(Math.round(candidates * 0.25), true);
 
-  // ---- Poisson-disc thinning: features first so they claim their dots before the fur does
-  const lum = (c) => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
-  const radius = (pt) => {
-    // dark features (pupils, brows, mouth line) are drawn as negative space: no dots at all
-    if (pt.kind === KIND.EYE && !pt.glow && lum(pt.col) < 0.06) return -1;
-    if (pt.kind === KIND.FEATURE && lum(pt.col) < 0.2) return -1;
-    // a thin empty ring around each eyeball so the white eye never melts into the white face
-    if (pt.kind !== KIND.EYE)
-      for (const e of EYES) if (Math.hypot(pt.p[0] - e.c[0], pt.p[1] - e.c[1], pt.p[2] - e.c[2]) < EYE_R + 0.035) return -1;
-    if (pt.glow) return featureSpacing * 0.9;
-    if (pt.kind === KIND.EYE || pt.kind === KIND.FEATURE) return featureSpacing;
-    if (pt.kind === KIND.SKIN) return featureSpacing * 0.85; // pink paws/feet/ears/nose read as solid pink clusters
-    if (pt.boneB === B.head && pt.p[0] > 0.64 && pt.p[1] > -0.14) return faceSpacing;
-    return spacing;
-  };
-  for (const pt of cand) pt.r = radius(pt);
-  for (let i = cand.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [cand[i], cand[j]] = [cand[j], cand[i]];
-  }
-  cand.sort((a, b) => (a.r === b.r ? 0 : a.r - b.r));
-  const cellSize = featureSpacing;
-  const grid = new Map();
-  const key = (i, j, k) => (i * 73856093) ^ (j * 19349663) ^ (k * 83492791);
+  // grids per spacing class: keep the first (random) candidate that lands in each cell
+  const grids = new Map();
   const core = [];
-  for (const pt of cand) {
-    if (pt.r < 0) continue;
-    const [x, y, z] = pt.p;
-    const ci = Math.floor(x / cellSize), cj = Math.floor(y / cellSize), ck = Math.floor(z / cellSize);
-    const reach = Math.ceil(pt.r / cellSize);
-    let free = true;
-    for (let i = -reach; i <= reach && free; i++)
-      for (let j = -reach; j <= reach && free; j++)
-        for (let k = -reach; k <= reach && free; k++) {
-          const bucket = grid.get(key(ci + i, cj + j, ck + k));
-          if (!bucket) continue;
-          for (const q of bucket) {
-            if (Math.hypot(q.p[0] - x, q.p[1] - y, q.p[2] - z) < pt.r) { free = false; break; }
-          }
-        }
-    if (!free) continue;
-    const kk = key(ci, cj, ck);
-    if (!grid.has(kk)) grid.set(kk, []);
-    grid.get(kk).push(pt);
+  const candidates = Math.round(D.candidates);
+  let tries = 0;
+  while (tries++ < candidates) {
+    const c = Math.floor(rnd() * nCells) * 3;
+    let x = cells[c] + rnd() * size[0], y = cells[c + 1] + rnd() * size[1], z = cells[c + 2] + rnd() * size[2];
+    let d = F.sdf(x, y, z);
+    if (Math.abs(d) > 0.02) continue;
+    const g = F.gradient(x, y, z);
+    x -= g[0] * d; y -= g[1] * d; z -= g[2] * d; // one Newton step onto the surface
+    d = F.sdf(x, y, z);
+    if (Math.abs(d) > 0.004) continue;
+    let label = F.label();
+    let name = anat.prims[label].name;
+    if (!name.startsWith('tooth') && -F.carve > F.union - 0.004) { label = 2; name = 'mouth'; } // 2 = head
+    const n = g;
+    const pr = anat.prims[label];
+    // skin weight between the primitive's bone and its parent
+    let boneA = 0, boneB = 0, w = 0;
+    if (pr.bone !== B.body) {
+      boneB = pr.bone;
+      boneA = PARENT[boneB];
+      let dSelf = 1e9, dPar = 1e9;
+      for (let i = 0; i < anat.prims.length; i++) {
+        if (anat.prims[i].bone === boneB) dSelf = Math.min(dSelf, F.d[i]);
+        else if (anat.prims[i].bone === boneA) dPar = Math.min(dPar, F.d[i]);
+      }
+      const band = boneB === B.head ? 0.22 : boneB === B.eyeN || boneB === B.eyeF ? 0.01 : boneB === B.cheekN || boneB === B.cheekF ? 0.14 : 0.09;
+      w = name === 'mouth' ? 1 : smoothstep(-band * 0.5, band, dPar - dSelf);
+    }
+    const reg = shade(name, [x, y, z], n, rnd);
+    const pt = { p: [x, y, z], n, col: reg.col, kind: reg.kind, fur: reg.fur, glow: reg.glow || 0, boneA, boneB, w, name };
+    const s = (pt.r = spacingOf(pt));
+    let grid = grids.get(s);
+    if (!grid) grids.set(s, (grid = new Set()));
+    const key = `${Math.floor(x / s)},${Math.floor(y / s)},${Math.floor(z / s)}`;
+    if (grid.has(key)) continue;
+    grid.add(key);
     core.push(pt);
   }
 
-  // ---- fluff: sparse dots floating just off the fur, plus dotted spikes for the crown tuft
+  // ---- fur: a soft fuzzy shell of loose dots (no straight quills) + curved crown locks
   const fur = [];
   const furry = core.filter((pt) => pt.fur > 0);
-  const eyeFade = (p) => {
+  const nearFeature = (p) => {
     let m = 1;
-    for (const e of EYES) m = Math.min(m, smoothstep(EYE_R + 0.02, EYE_R + 0.2, Math.hypot(p[0] - e.c[0], p[1] - e.c[1], p[2] - e.c[2])));
-    m = Math.min(m, smoothstep(0.2, 0.36, Math.hypot(p[0] - MOUTH.c[0], p[1] - MOUTH.c[1], p[2] - MOUTH.c[2])));
+    for (const e of anat.eyes) m = Math.min(m, smoothstep(e.r + 0.03, e.r + 0.18, dist(p, e.c)));
+    m = Math.min(m, smoothstep(0.12, 0.3, dist(p, anat.mouth.c)), smoothstep(0.06, 0.2, dist(p, anat.prims[4].c)));
     return m;
   };
-  const strandDir = (pt, tuft) => {
+  const combDir = (pt) => {
     const { p, n } = pt;
-    const f = tuft ? 7 : 3.5;
+    const f = 3.5;
     const comb = [noise3(p[0] * f, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f + 11, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f, p[1] * f + 23, p[2] * f) - 0.5];
-    let flow;
-    if (tuft) flow = [-0.35, 1.0, 0];
-    else if (pt.name.startsWith('cheek')) flow = [-0.7, -0.6, 0];
-    else if (pt.kind === KIND.WHITE_FUR) flow = [-0.3, -1, 0]; // belly fluff hangs down
-    else flow = [-1, -0.3, 0];
-    const coh = tuft ? 2.2 : 1.0, jit = tuft ? 0.25 : 0.35, lay = tuft ? 0.55 : 0.95;
-    return norm([0, 1, 2].map((k) => n[k] + flow[k] * lay + comb[k] * coh + (rnd() - 0.5) * jit));
+    const flow = pt.name.startsWith('cheek') ? [-0.6, -0.5, 0] : pt.kind === KIND.WHITE_FUR ? [-0.3, -1, 0] : [-1, -0.25, 0];
+    return norm([0, 1, 2].map((k) => n[k] + flow[k] * cfg.fur.lay + comb[k] * 0.9 + (rnd() - 0.5) * 0.4));
   };
-  const tipOf = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, C.gold, 0.3 + rnd() * 0.35) : mix3(pt.col, [1, 1, 1], 0.35));
-  for (let s = 0; s < fluff && furry.length; s++) {
+  const furTip = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, cfg.palette.furTip, 0.35 + rnd() * 0.35) : mix3(pt.col, [1, 1, 1], 0.3));
+  for (let s = 0; s < cfg.fur.fluff && furry.length; s++) {
     const root = furry[Math.floor(rnd() * furry.length)];
-    const len = 0.13 * root.fur * eyeFade(root.p) * (0.45 + rnd() * 0.95);
-    if (len < 0.035) continue;
-    const dir = strandDir(root, false);
-    // dots along the hair ~0.03 apart: long fluffy fur that is still clearly separate dots
-    const steps = Math.max(1, Math.round(len / 0.03));
-    const tip = tipOf(root), seedS = rnd(), fleck = rnd() < 0.05;
-    for (let k = 1; k <= steps; k++) {
-      const t = k / steps;
-      fur.push({
-        p: [0, 1, 2].map((q) => root.p[q] + dir[q] * len * t - (q === 1 ? 0.35 * len * t * t : 0)),
-        n: root.n, col: mix3(root.col, tip, t), kind: root.kind,
-        boneA: root.boneA, boneB: root.boneB, w: root.w,
-        t, fleck: fleck && k === steps ? 1 : 0, seed: seedS, size: 0.85 - 0.3 * t, alpha: 0.85 - 0.4 * t,
-      });
-    }
+    const len = cfg.fur.len * root.fur * nearFeature(root.p) * (0.45 + rnd() * 0.75);
+    if (len < 0.02) continue;
+    const dir = combDir(root);
+    const u = Math.pow(rnd(), 0.8);
+    fur.push({
+      p: [0, 1, 2].map((k) => root.p[k] + dir[k] * len * u - (k === 1 ? 0.3 * len * u * u : 0)),
+      n: root.n, col: mix3(root.col, furTip(root), u), kind: root.kind,
+      boneA: root.boneA, boneB: root.boneB, w: root.w,
+      t: u, fleck: rnd() < 0.03 ? 1 : 0, seed: rnd(), size: D.fluffSize * (1 - 0.35 * u), alpha: 0.95 - 0.45 * u,
+    });
   }
-  const tuftRoots = furry.filter((pt) => pt.name === 'head' && pt.n[1] > 0.55 && pt.kind === KIND.FUR);
-  for (let s = 0; s < tuftSpikes && tuftRoots.length; s++) {
-    const root = tuftRoots[Math.floor(rnd() * tuftRoots.length)];
-    const len = 0.11 * 2.2 * (0.6 + rnd() * 0.7);
-    const dir = strandDir(root, true);
-    const steps = Math.max(3, Math.round(len / 0.026));
-    const seedS = rnd(), tip = tipOf(root);
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
+  // crown locks: soft curved bundles of dots on top of the head, swaying with the crown bone
+  const CR = cfg.fur.crown;
+  const top = add(anat.HC, [CR.offset[0], anat.prims[2].r[1] * 0.92 + CR.offset[1], 0]);
+  for (let l = 0; l < CR.locks; l++) {
+    const a = (l / CR.locks - 0.5) * CR.fan + (rnd() - 0.5) * 0.25;
+    const base = add(top, [Math.sin(a * 0.6) * 0.12 + (rnd() - 0.5) * 0.1, -Math.abs(a) * 0.05, Math.sin(a) * 0.16]);
+    const lean = norm([CR.lean[0] + (rnd() - 0.5) * CR.mess, 1, Math.sin(a) * 0.8 + (rnd() - 0.5) * CR.mess]);
+    const len = CR.len * (0.7 + rnd() * 0.5);
+    const tipCol = mix3(cfg.palette.furHi, cfg.palette.furTip, rnd());
+    for (let k = 0; k < CR.dots; k++) {
+      const t = Math.pow(k / (CR.dots - 1), 0.9);
+      const curl = CR.curl * t * t;
+      const spread = CR.spread * (1 - t * 0.85);
+      const p = [
+        base[0] + lean[0] * len * t + curl + (rnd() - 0.5) * spread,
+        base[1] + lean[1] * len * t - Math.abs(curl) * 0.4 + (rnd() - 0.5) * spread,
+        base[2] + lean[2] * len * t + (rnd() - 0.5) * spread,
+      ];
       fur.push({
-        p: [0, 1, 2].map((k) => root.p[k] + dir[k] * len * t - (k === 1 ? 0.05 * len * t * t : 0)),
-        n: root.n, col: mix3(root.col, tip, t), kind: root.kind,
-        boneA: root.boneA, boneB: root.boneB, w: root.w,
-        t, fleck: 0, seed: seedS, size: 0.9 - 0.35 * t, alpha: 0.95 - 0.4 * t,
+        p, n: norm([lean[0], 1, lean[2]]), col: mix3(cfg.palette.fur[2], tipCol, t), kind: KIND.FUR,
+        boneA: B.head, boneB: B.crown, w: smoothstep(0, 0.6, t),
+        t, fleck: 0, seed: rnd(), size: D.fluffSize * (1.1 - 0.5 * t), alpha: 0.95 - 0.35 * t,
       });
     }
   }
 
-  // a few sparse sparkle dots (bigger, brighter) on the fur, like the Motion.dev field
-  for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.035) pt.sparkle = 1;
-  const dotSize = (pt) => (pt.glow ? 1.15 : pt.sparkle ? 1.45 : pt.kind === KIND.SKIN ? 1 : pt.r <= featureSpacing * 1.3 ? 0.86 : pt.r <= faceSpacing ? 0.92 : 1);
+  for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.025) pt.sparkle = 1;
+  // cream dots a touch larger: less black between bright dots, so pale fur reads soft, not grainy
+  const sizeOf = (pt) => (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.WHITE_FUR ? 1.14 : 1) * pt.r * D.dotScale;
   const out = {
-    core: pack(core, (pt) => 0.03 * dotSize(pt), () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),
-    fur: pack(fur, (pt) => 0.029 * pt.size, (pt) => pt.t, (pt) => pt.fleck, (pt) => pt.seed, (pt) => pt.alpha),
+    id: cfg.id,
+    core: pack(core, sizeOf, () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),
+    fur: pack(fur, (pt) => pt.size, (pt) => pt.t, (pt) => pt.fleck, (pt) => pt.seed, (pt) => pt.alpha),
     counts: { core: core.length, fur: fur.length },
   };
-  // dense surface samples, only for the headless renderer's occlusion buffer
-  if (depthCloud) out.depth = pack(cand, () => 0.03, () => 0, () => 0, null, () => 1);
+  if (depthCloud) out.depth = pack(core, () => D.body * 1.2, () => 0, () => 0, null, () => 1);
   return out;
 }
 
@@ -533,8 +448,8 @@ function pack(list, sizeOf, tOf, flagOf, seedOf, alphaOf) {
   list.forEach((pt, i) => {
     L.position.set(pt.p, i * 3);
     L.normal.set(pt.n, i * 3);
-    L.color.set(pt.col, i * 3);
-    L.size[i] = sizeOf(pt) * (0.72 + r() * 0.56);
+    L.color.set(pt.col.map((c) => clamp(c, 0, 1)), i * 3);
+    L.size[i] = sizeOf(pt) * (0.8 + r() * 0.4);
     L.boneA[i] = pt.boneA;
     L.boneB[i] = pt.boneB;
     L.weight[i] = pt.w;
@@ -562,6 +477,11 @@ function T(x, y, z) {
   m[12] = x; m[13] = y; m[14] = z;
   return m;
 }
+function S(x, y, z) {
+  const m = I4();
+  m[0] = x; m[5] = y; m[10] = z;
+  return m;
+}
 function R(ax, ay, az) {
   // R = Rz * Ry * Rx
   const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay), cz = Math.cos(az), sz = Math.sin(az);
@@ -571,43 +491,75 @@ function R(ax, ay, az) {
   m[8] = cz * sy * cx + sz * sx; m[9] = sz * sy * cx - cz * sx; m[10] = cy * cx;
   return m;
 }
-const about = (pv, rot, extra = [0, 0, 0]) => mul(T(pv[0] + extra[0], pv[1] + extra[1], pv[2] + extra[2]), mul(rot, T(-pv[0], -pv[1], -pv[2])));
+// rotate (and optionally scale) about a pivot, then offset
+const about = (pv, rot, extra = [0, 0, 0], scale) =>
+  mul(T(pv[0] + extra[0], pv[1] + extra[1], pv[2] + extra[2]), mul(scale ? mul(rot, S(...scale)) : rot, T(-pv[0], -pv[1], -pv[2])));
 
-export const RUN_PERIOD = 0.42; // seconds per stride
+const _anatCache = new Map();
+const anatomyOf = (cfg) => {
+  if (!_anatCache.has(cfg.id)) _anatCache.set(cfg.id, makeAnatomy(cfg));
+  return _anatCache.get(cfg.id);
+};
+
+/** stride length (seconds) of a character's run */
+export const runPeriod = (character = 'orange') => (typeof character === 'string' ? CHARACTERS[character] : character).run.period;
+export const RUN_PERIOD = runPeriod('orange');
+
+// smooth periodic "event" envelope: 0 most of the time, a short bump every `every` seconds
+const bump = (t, every, dur, offset = 0) => {
+  const x = (((t + offset) % every) + every) % every;
+  return x < dur ? Math.sin((x / dur) * Math.PI) : 0;
+};
 
 /**
  * Skinning matrices for every bone at time t (seconds).
- * run: 0 = standing/idle, 1 = full run (blendable).
+ * run: 0 = standing/idle, 1 = full run (blendable). The cycle loops exactly every run.period.
  * @returns {Float32Array} BONES.length * 16
  */
-export function poseMatrices(t, run = 1, out = new Float32Array(BONES.length * 16)) {
-  const ph = (t / RUN_PERIOD) * Math.PI * 2;
+export function poseMatrices(t, run = 1, out = new Float32Array(BONES.length * 16), character = 'orange') {
+  const cfg = typeof character === 'string' ? CHARACTERS[character] : character;
+  const M = cfg.run, PV = anatomyOf(cfg).pivots;
+  const ph = (t / M.period) * Math.PI * 2;
   const breathe = Math.sin(t * 2.2) * 0.012 * (1 - run);
-  // half-bound gait: the two hind legs strike ~0.3 of a stride apart, front paws pump in
-  // counter-phase; the body rises twice per stride and pitches with the push-off
-  const rot = [];
   const bounce = 0.5 - 0.5 * Math.cos(2 * ph - 0.6);
-  rot[B.body] = about(PIVOT[0], R(0, 0, run * 0.09 * Math.sin(ph + 0.5)), [0, run * 0.085 * bounce + breathe, 0]);
-  // head lags the body (follow-through) and bobs a little against it
-  rot[B.head] = about(PIVOT[1], R(0, run * 0.03 * Math.sin(ph), -run * 0.1 * Math.sin(ph - 0.2) + 0.02 * (1 - run) * Math.sin(t * 0.9)), [0, -run * 0.025 * bounce, 0]);
-  // ears blown back while running, flapping a beat behind the bounce
+  // squash on landing, stretch at the top (volume roughly preserved)
+  const sq = run * M.squash * Math.cos(2 * ph - 0.6);
+  const rot = [];
+  rot[B.body] = about(PV[B.body], R(0, 0, run * M.pitch * Math.sin(ph + 0.5)), [0, run * M.bounce * bounce + breathe, 0], [1 + sq * 0.5, 1 - sq, 1 + sq * 0.5]);
+  // head: follow-through lag, plus a personality tilt (roll) and a slow curious turn
+  const tilt = M.tilt * Math.sin(t * M.tiltSpeed) + M.tilt * 0.6 * bump(t, M.tiltEvery, 1.6, 0.5);
+  rot[B.head] = about(PV[B.head], R(tilt, M.turn * Math.sin(t * 0.7), -run * M.headLag * Math.sin(ph - 0.2) + 0.02 * (1 - run) * Math.sin(t * 0.9)), [0, -run * 0.025 * bounce, 0]);
   const earLag = Math.sin(2 * ph - 1.8);
-  rot[B.earN] = about(PIVOT[2], R(run * 0.12 * earLag, 0, run * (0.22 + 0.16 * earLag)));
-  rot[B.earF] = about(PIVOT[3], R(-run * 0.12 * earLag, 0, run * (0.22 + 0.16 * earLag)));
+  const perk = M.earPerk * bump(t, M.expressionEvery, 1.2, 0.3);
+  rot[B.earN] = about(PV[B.earN], R(run * 0.1 * earLag, 0, run * (M.earFlop + 0.12 * earLag) - perk));
+  rot[B.earF] = about(PV[B.earF], R(-run * 0.1 * earLag, 0, run * (M.earFlop + 0.12 * earLag) - perk));
   for (const [bone, off] of [[B.legN, 0], [B.legF, Math.PI * 0.62]]) {
     const a = Math.sin(ph + off);
-    const ang = run * (0.8 * a - 0.18);
-    // a rigid leg swinging about the hip would arc the foot up into the belly; drop the bone by
-    // the arc height (a cheap knee) and lift only during the forward recovery swing
+    const ang = run * (M.legAmp * a - 0.15);
+    // a rigid leg swinging about the hip would arc the foot into the belly; drop the bone by the
+    // arc height (a cheap knee) and lift only during the forward recovery swing
     const lift = Math.max(0, Math.cos(ph + off));
     const drop = 0.6 * (1 - Math.cos(ang));
-    rot[bone] = about(PIVOT[bone], R(0, 0, ang), [run * 0.04 * a, run * 0.08 * lift - drop, 0]);
+    rot[bone] = about(PV[bone], R(0, 0, ang), [run * 0.04 * a, run * 0.08 * lift - drop, 0]);
   }
   for (const [bone, off] of [[B.armN, Math.PI], [B.armF, Math.PI * 1.62]]) {
     const a = Math.sin(ph + off);
-    rot[bone] = about(PIVOT[bone], R(0, 0, run * 0.75 * a + 0.05), [run * 0.06 * Math.cos(ph + off), 0, 0]);
+    rot[bone] = about(PV[bone], R(0, 0, run * M.armAmp * a + 0.05), [run * 0.04 * Math.cos(ph + off), 0, 0]);
   }
-  rot[B.tail] = about(PIVOT[B.tail], R(0, run * 0.4 * Math.sin(2 * ph), run * 0.3 * Math.sin(ph + 1.2)));
+  rot[B.tail] = about(PV[B.tail], R(0, run * 0.4 * Math.sin(2 * ph), run * 0.3 * Math.sin(ph + 1.2)));
+  // cheeks jiggle a beat after each landing
+  const jig = 1 + run * M.cheekJiggle * Math.sin(2 * ph - 1.6);
+  rot[B.cheekN] = about(PV[B.cheekN], I4(), [0, 0, 0], [jig, 2 - jig, jig]);
+  rot[B.cheekF] = about(PV[B.cheekF], I4(), [0, 0, 0], [jig, 2 - jig, jig]);
+  rot[B.crown] = about(PV[B.crown], R(M.crownSway * Math.sin(ph * 2 - 2.2), 0, -run * M.crownSway * (0.6 + 0.6 * Math.sin(2 * ph - 2.4))));
+  // eyes: blinks, curious glances, and the character's expression (happy squint / surprise)
+  const blink = bump(t, M.blinkEvery, 0.16, 0.9);
+  const expr = bump(t, M.expressionEvery, 1.2, 0.3);
+  let eyeScale = 1 - 0.88 * blink;
+  if (M.expression === 'squint') eyeScale *= 1 - 0.5 * expr;
+  const eyeGrow = M.expression === 'surprise' ? 1 + 0.2 * expr : 1;
+  const glance = M.glance * Math.sin(t * 0.8) + M.glance * bump(t, 3.7, 0.9) * 0.8;
+  for (const bone of [B.eyeN, B.eyeF]) rot[bone] = about(PV[bone], R(0, glance, M.glance * 0.4 * Math.sin(t * 0.6)), [0, 0, 0], [eyeGrow, eyeScale * eyeGrow, eyeGrow]);
 
   const world = [];
   for (let i = 0; i < BONES.length; i++) {

@@ -11,9 +11,11 @@ export const ASCII_FRAGMENT = /* glsl */ `
   uniform vec2 uCells;
   uniform vec2 uCellPx;
   uniform float uGlyphCount;
+  uniform vec2 uOffset; // viewport origin in device pixels (gallery sub-viewports)
   void main() {
-    vec2 cell = floor(gl_FragCoord.xy / uCellPx);
-    vec2 local = fract(gl_FragCoord.xy / uCellPx);
+    vec2 fc = gl_FragCoord.xy - uOffset;
+    vec2 cell = floor(fc / uCellPx);
+    vec2 local = fract(fc / uCellPx);
     vec3 c = vec3(0.0);
     c += texture2D(tScene, (cell + vec2(0.25, 0.25)) / uCells).rgb;
     c += texture2D(tScene, (cell + vec2(0.75, 0.25)) / uCells).rgb;
@@ -61,6 +63,7 @@ export class AsciiPass {
         uCells: { value: new THREE.Vector2(1, 1) },
         uCellPx: { value: new THREE.Vector2(...cell) },
         uGlyphCount: { value: ramp.length },
+        uOffset: { value: new THREE.Vector2(0, 0) },
       },
       vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: ASCII_FRAGMENT,
@@ -84,11 +87,17 @@ export class AsciiPass {
     return { cols, rows };
   }
 
-  render(scene, camera) {
+  /**
+   * @param {object} [rect] sub-viewport {x, y, w, h} in CSS px from the bottom-left (as for
+   *   renderer.setViewport); omit to fill the canvas
+   */
+  render(scene, camera, rect) {
     const r = this.renderer;
     r.setRenderTarget(this.target);
     r.render(scene, camera);
-    r.setRenderTarget(null);
+    r.setRenderTarget(null); // restores the caller's viewport/scissor
+    const dpr = r.getPixelRatio();
+    this.material.uniforms.uOffset.value.set(rect ? rect.x * dpr : 0, rect ? rect.y * dpr : 0);
     r.render(this.scene, this.camera);
   }
 

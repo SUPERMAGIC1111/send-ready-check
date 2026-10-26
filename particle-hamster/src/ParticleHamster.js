@@ -1,16 +1,20 @@
 // Reusable Three.js dot hamster. Takes the dot layers produced by buildHamster() (see
-// hamsterModel.js) and skins them on the GPU with the run-cycle bone matrices from
-// poseMatrices(). Drop it into any scene (e.g. inside an orb later).
+// hamsterModel.js) and skins them on the GPU with the character's run-cycle bone matrices from
+// poseMatrices(). Drop it into any scene (standalone, or inside a ParticleOrb).
 //
-//   const hamster = new ParticleHamster(layers);
+//   const hamster = new ParticleHamster(layers, 'orange');
 //   scene.add(hamster);
 //   hamster.setPointScale(drawingBufferHeight, camera.fov, pixelRatio);
 //   hamster.update(seconds, { run: 1, assemble: 1 });
 //   hamster.setSolid(true);   // opaque, enlarged dots: the source image for the ASCII pass
 //   hamster.dispose();
+//
+// Surface dots are opaque, depth-tested discs (anti-aliased with alpha-to-coverage), so dense
+// silhouettes never blow out to white the way additive dots do; the fur is a soft blended shell.
 import * as THREE from 'three';
 import { BONES, poseMatrices } from './hamsterModel.js';
-import { LIGHT, ASCII, CAMERA } from './shading.js';
+import { CHARACTERS } from './characters.js';
+import { LIGHT, ASCII, CAMERA, LOOK } from './shading.js';
 
 const BONE_COUNT = BONES.length;
 
@@ -55,12 +59,12 @@ const VERTEX = /* glsl */ `
     vec3 n = normalize(mix(mat3(A) * normal, mat3(B) * normal, aWeight));
 
   #ifdef FUR
-    // loose dots trail backwards while running and sway a little
-    float sw = sin(uTime * (4.0 + 7.0 * uRun) + aSeed * 6.2831);
-    p += vec3(-0.02 * uRun - 0.004, 0.012 * sw, 0.008 * sw) * aT;
-    // a few dots escape the fur, drift off and come back
+    // fluff trails back a little while running and breathes softly
+    float sw = sin(uTime * (3.0 + 6.0 * uRun) + aSeed * 6.2831);
+    p += vec3(-0.018 * uRun - 0.003, 0.008 * sw, 0.006 * sw) * aT;
+    // a few loose dots drift off the fur and come back
     float d = pow(max(0.0, sin(uTime * 0.6 + aSeed * 40.0)), 6.0) * aFlag;
-    p += n * d * 0.3 + vec3(-0.18, 0.1, 0.0) * d;
+    p += n * d * 0.22 + vec3(-0.14, 0.08, 0.0) * d;
   #endif
 
     // assemble from a scattered cloud (uAssemble 0 -> 1)
@@ -72,29 +76,34 @@ const VERTEX = /* glsl */ `
     vec3 nv = normalize(normalMatrix * n);
 
     float ndl = dot(nv, uLight);
-    float diff = clamp((ndl + 0.45) / 1.45, 0.0, 1.0);
-    float rim = pow(1.0 - clamp(nv.z, 0.0, 1.0), 2.0);
-    float tw = 0.88 + 0.12 * sin(uTime * 1.7 + aSeed * 61.0);
+    float diff = clamp((ndl + ${LOOK.wrap.toFixed(3)}) / ${(1 + LOOK.wrap).toFixed(3)}, 0.0, 1.0);
+    float rim = pow(1.0 - clamp(nv.z, 0.0, 1.0), 3.0);
+    float tw = 1.0 - ${LOOK.twinkle.toFixed(3)} + ${LOOK.twinkle.toFixed(3)} * sin(uTime * 1.7 + aSeed * 61.0);
     float wave = 0.5 + 0.5 * sin(dot(position, vec3(2.1, 1.3, 1.7)) - uTime * 0.9);
-    vec3 base = mix(aColor, aColor * vec3(1.08, 0.92, 1.05) + vec3(0.05, 0.0, 0.04), 0.25 * wave);
+    vec3 base = aColor * (1.0 + ${LOOK.drift.toFixed(3)} * (wave - 0.5));
+    // nearer dots a touch brighter, farther a touch dimmer: depth reads in a still frame
+    float fade = clamp(1.0 - (-mv.z - uFocus) * ${LOOK.depthFade.toFixed(3)}, 0.75, 1.12);
     vec3 col;
-    // nearer dots brighter, farther dimmer: depth reads even in a still frame
-    float fade = clamp(1.0 - (-mv.z - uFocus) * 0.45, 0.5, 1.2);
     if (aKind > 2.5 && aKind < 3.5) {
-      // eyes: catch-lights are the brightest dots on the character
-      col = aFlag > 0.5 ? vec3(1.4) : base * (0.85 + 0.4 * diff) * fade;
+      // glossy bead eyes: catch-lights are the brightest dots on the character
+      col = aFlag > 0.5 ? vec3(1.0) : base * (0.9 + 0.25 * diff);
+    } else if (aKind > 4.5) {
+      col = base * (0.85 + 0.3 * diff); // inside of the smile
     } else {
+      float lit = ${LOOK.ambient.toFixed(3)} + ${LOOK.diffuse.toFixed(3)} * diff;
+    #ifdef FUR
+      lit += 0.08 * aT;
+    #endif
       // aFlag: sparkle dot (surface) or drifting fleck (fur)
-      col = (base * (0.85 + 0.85 * diff) * tw + rim * 0.3 * (0.6 * base + 0.4)) * fade + aFlag * 0.4;
+      col = (base * lit * tw + rim * ${LOOK.rim.toFixed(3)} * (0.5 * base + 0.5)) * fade + aFlag * 0.22;
     }
     vColor = col;
     vKind = aKind;
     vAlpha = aAlpha * mix(0.2, 1.0, k);
 
-    float boost = 0.9 + 0.2 * rim;
-    // ASCII source pass: features (kind >= 2) grow less so pupils and eye rings stay open
+    // ASCII source pass: features (kind >= 2) grow less so eyes and the smile stay readable
     float grow = uSolid > 0.5 ? (aKind > 1.5 ? ${ASCII.featureDotScale.toFixed(3)} : uDotScale) : uDotScale;
-    gl_PointSize = max(uMinSize, aSize * boost * grow * uScale / -mv.z);
+    gl_PointSize = max(uMinSize, aSize * grow * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -109,16 +118,15 @@ const FRAGMENT = /* glsl */ `
     float r = length(c) * 2.0;
     if (r > 1.0) discard;
     if (uSolid > 0.5) {
-      // keep lit colours below the 8-bit clamp so orange stays orange for the glyph pass
-      // white fur a step below the pure-white eyes so the eyes keep the densest glyphs
+      // keep lit colours below the 8-bit clamp so colour survives the glyph pass
       float gain = ${ASCII.solidGain.toFixed(3)} * (abs(vKind - 1.0) < 0.5 ? ${ASCII.whiteFurGain.toFixed(3)} : 1.0);
       gl_FragColor = vec4(vColor * gain, 1.0);
-    } else {
-      // crisp core + soft glow; additive, so black stays black between dots
-      float core = smoothstep(0.72, 0.3, r);
-      float halo = exp(-r * r * 5.0) * 0.6;
-      gl_FragColor = vec4(vColor, vAlpha * (core + halo));
+      return;
     }
+    // round dot with a soft edge (alpha-to-coverage on the surface layer, blending on the fur)
+    float a = smoothstep(1.0, 0.62, r) * vAlpha;
+    if (a < 0.02) discard;
+    gl_FragColor = vec4(vColor * (1.04 - 0.1 * r * r), a);
   }
 `;
 
@@ -150,12 +158,14 @@ function layerGeometry(L) {
   return g;
 }
 
-function occluderGeometry() {
+function occluderGeometry(cfg) {
   // shrunken body, belly and head ellipsoids (rest pose), tagged with their bone
+  const A = cfg.anatomy;
+  const shrink = (e, k) => ({ c: e.c, r: e.r.map((v) => v * k) });
   const parts = [
-    { c: [-0.16, -0.15, 0], r: [0.72, 0.69, 0.72], bone: 0 },
-    { c: [0.06, -0.39, 0], r: [0.56, 0.4, 0.6], bone: 0 },
-    { c: [0.5, 0.36, 0], r: [0.56, 0.52, 0.55], bone: 1 },
+    { ...shrink(A.body, 0.88), bone: 0 },
+    { ...shrink(A.belly, 0.84), bone: 0 },
+    { ...shrink(A.head, 0.86), bone: 1 },
   ];
   const geos = parts.map(({ c, r, bone }) => {
     const g = new THREE.SphereGeometry(1, 28, 20);
@@ -184,10 +194,14 @@ function occluderGeometry() {
 }
 
 export class ParticleHamster extends THREE.Group {
-  /** @param {{core: object, fur: object}} layers output of buildHamster() */
-  constructor(layers) {
+  /**
+   * @param {{core: object, fur: object}} layers output of buildHamster()
+   * @param {string} character id in characters.js (drives the pose personality and occluder)
+   */
+  constructor(layers, character = layers.id || 'orange') {
     super();
     this.name = 'ParticleHamster';
+    this.character = CHARACTERS[character];
     this._boneData = new Float32Array(BONE_COUNT * 16);
     const shared = {
       uBones: { value: Array.from({ length: BONE_COUNT }, () => new THREE.Matrix4()) },
@@ -209,7 +223,7 @@ export class ParticleHamster extends THREE.Group {
       fragmentShader: 'void main() { gl_FragColor = vec4(0.0); }',
       colorWrite: false,
     });
-    this.occluder = new THREE.Mesh(occluderGeometry(), this._occluderMat);
+    this.occluder = new THREE.Mesh(occluderGeometry(this.character), this._occluderMat);
     this.occluder.renderOrder = 0;
     this.occluder.frustumCulled = false;
 
@@ -219,9 +233,9 @@ export class ParticleHamster extends THREE.Group {
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
         defines: fur ? { FUR: '' } : {},
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        transparent: fur,
+        depthWrite: !fur,
+        alphaToCoverage: !fur,
       });
     this._coreMat = dotMaterial(false);
     this._furMat = dotMaterial(true);
@@ -236,26 +250,31 @@ export class ParticleHamster extends THREE.Group {
     this.update(0, { run: 1 });
   }
 
-  /** world-size -> pixel conversion; call on resize with the drawing-buffer height */
+  /** world-size -> pixel conversion; call on resize with the viewport height in device pixels */
   setPointScale(bufferHeight, fovDeg, pixelRatio = 1) {
     this.uniforms.uScale.value = bufferHeight / (2 * Math.tan((fovDeg * Math.PI) / 360));
-    this.uniforms.uMinSize.value = Math.max(1, 1.2 * pixelRatio);
+    this.uniforms.uMinSize.value = Math.max(1, 0.9 * pixelRatio);
+  }
+
+  /** camera distance used for the subtle depth fade */
+  setFocus(distance) {
+    this.uniforms.uFocus.value = distance;
   }
 
   /** opaque enlarged dots with depth: the source image the ASCII pass samples */
   setSolid(on) {
     this.uniforms.uSolid.value = on ? 1 : 0;
     this.uniforms.uDotScale.value = on ? ASCII.solidDotScale : 1;
-    for (const m of [this._coreMat, this._furMat]) {
-      m.blending = on ? THREE.NoBlending : THREE.AdditiveBlending;
-      m.transparent = !on;
-      m.depthWrite = on;
-    }
+    this._furMat.blending = on ? THREE.NoBlending : THREE.NormalBlending;
+    this._furMat.transparent = !on;
+    this._furMat.depthWrite = on;
+    this._coreMat.alphaToCoverage = !on;
+    this._coreMat.needsUpdate = true;
   }
 
   /** @param {number} t seconds; run 0..1 blends idle -> run; assemble 0..1 for the intro */
   update(t, { run = 1, assemble = 1 } = {}) {
-    poseMatrices(t, run, this._boneData);
+    poseMatrices(t, run, this._boneData, this.character);
     const bones = this.uniforms.uBones.value;
     for (let i = 0; i < BONE_COUNT; i++) bones[i].fromArray(this._boneData, i * 16);
     this.uniforms.uTime.value = t;

@@ -5,6 +5,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SHADERS } from '../src/ParticleHamster.js';
+import { ORB_SHADERS } from '../src/ParticleOrb.js';
 
 const VPRE = `#version 300 es
 precision highp float; precision highp int;
@@ -28,6 +29,8 @@ const jobs = [
   ['core.frag', FPRE + SHADERS.FRAGMENT],
   ['fur.frag', FPRE + '#define FUR\n' + SHADERS.FRAGMENT],
   ['occluder.vert', VPRE + SHADERS.OCCLUDER_VERTEX],
+  ['orb.vert', VPRE + ORB_SHADERS.VERTEX],
+  ['orb.frag', FPRE + ORB_SHADERS.FRAGMENT],
 ];
 let failed = 0;
 for (const [name, src] of jobs) {

@@ -57,4 +57,10 @@ export const LAB_VARIANTS = [
     style: { round: 1.0, gloss: 0.2 } },
   { id: 'happyPlush', label: 'Happy Hamster (plush)', note: 'experimental', character: 'happyHamster', render: 'voxel', build: happyBuild,
     style: { round: 0.5, plush: 1, shell: { offset: 0.32, scale: 1.08, alpha: 1, face: false } } },
+  // --- V9 anatomy correction: one candidate each, V8 variants above stay as they were
+  { id: 'brainHappy', label: 'Happy Folded Brain V9', note: 'candidate', character: 'brain', render: 'voxel', brain: true,
+    build: { brain: 'dots', brainOpts: { model: 'sculptHappy', spacing: 0.0225, candidates: 90000 }, voxel: 0.045 },
+    style: { round: 0.9, gloss: 0.22 } },
+  { id: 'happyV9', label: 'Happy Hamster V9', note: 'candidate', character: 'happyHamsterV9', render: 'voxel', build: happyBuild,
+    style: { round: 1.0, gloss: 0.2 } },
 ];

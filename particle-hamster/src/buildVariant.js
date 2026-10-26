@@ -3,7 +3,9 @@
 import { buildHamster } from './hamsterModel.js';
 import { voxelize } from './voxels.js';
 import { buildBrain, brainField } from './brainModel.js';
-import { SCULPT_MODEL } from './brainSculpt.js';
+import { SCULPT_MODEL, SCULPT_HAPPY_MODEL } from './brainSculpt.js';
+
+const BRAIN_MODELS = { sculpt: SCULPT_MODEL, sculptHappy: SCULPT_HAPPY_MODEL };
 
 // merge two packed layers (same attribute set) so both can be voxelised together
 function concat(a, b) {
@@ -20,7 +22,7 @@ function concat(a, b) {
 export function buildVariant(character, build = {}) {
   if (build.brain === 'field') return { ...buildBrain({ candidates: 0 }), field: brainField() };
   const layers = build.brain
-    ? buildBrain(build.brainOpts?.model === 'sculpt' ? { ...build.brainOpts, model: SCULPT_MODEL } : build.brainOpts)
+    ? buildBrain(BRAIN_MODELS[build.brainOpts?.model] ? { ...build.brainOpts, model: BRAIN_MODELS[build.brainOpts.model] } : build.brainOpts)
     : buildHamster(character, build.override ? { override: build.override } : {});
   if (build.voxel) layers.voxel = voxelize(build.voxelFur ? concat(layers.core, layers.fur) : layers.core, build.voxel);
   return layers;

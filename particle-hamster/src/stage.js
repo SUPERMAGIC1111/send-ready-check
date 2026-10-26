@@ -171,6 +171,9 @@ export class HamsterStage {
         if (name.startsWith('foot')) floorY = Math.min(floorY, p[1]);
       }
     }
+    // a hamster that runs on the curved rim (scurry floorR) stands on its rest sole line
+    const cfg = CHARACTERS[this.character], SC = cfg.run.scurry;
+    if (SC?.floorR) floorY = cfg.anatomy.foot.c[1] - cfg.anatomy.foot.r[1];
     const H = maxY - floorY;
     // a fixed world scale (character wheelScale, or lockScale for QA comparisons) wins over the
     // auto-fit, so a hamster with short legs is not enlarged to fill the same height
@@ -178,10 +181,11 @@ export class HamsterStage {
     const k = fixed ?? Math.min(1, (0.56 * 2 * Rin) / H);
     this.wheelScale = k;
     this.rig.scale.setScalar(k);
-    this.rig.position.set(-k * (minX + maxX) / 2, -Rin + 0.02 - k * floorY, 0);
+    this.rig.position.set(-k * (cfg.wheelCenterX ?? (minX + maxX) / 2), -Rin + 0.02 - k * floorY, 0);
     this.hamster.setSizeK(k);
     // ground speed of the run, scaled to this rig, in scene units per second; omega = V / R
-    this.wheelOmega = (runSpeed(this.character).speed * k) / R;
+    // omega = V / R; on the curved floor the paws touch the rim at Rin - 0.02, so use that radius
+    this.wheelOmega = (runSpeed(this.character).speed * k) / (SC?.floorR ? Rin - 0.02 : R);
     this.wheelRin = Rin;
     this.wheelHeightFraction = (H * k) / (2 * Rin);
   }

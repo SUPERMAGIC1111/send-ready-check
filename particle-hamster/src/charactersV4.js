@@ -315,4 +315,33 @@ happy.whiskers = { ...happy.whiskers, count: 0 };
 happy.fur = { ...happy.fur, crown: { ...happy.fur.crown, locks: 40, dots: 70, len: 0.5, fan: 1.5, lean: [-0.2], mess: 0.7, spread: 0.3, offset: [0.0, -0.1] } };
 happy.run = { ...scurry.run, expression: 'surprise', glance: 0.06, scurry: { ...scurry.run.scurry, step: 0.36, reach: { paw: 0.12, foot: -0.1 } } };
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, brain };
+// --- Happy Hamster V9 (anatomy correction): the V8 Happy Hamster made a horizontal animal: body
+// longer and lower, head forward and down, hind legs tucked under the rump, front paws under the
+// chin, bigger and quicker scurry steps on the curved wheel rim, cheek and ear bounce.
+const happy9 = clone(happy);
+Object.assign(happy9, { id: 'happyHamsterV9', name: 'Happy Hamster V9' });
+{
+  const A8 = happy.anatomy, D = [0.12, -0.2, 0];
+  const mv = (part) => ({ ...A8[part], c: [A8[part].c[0] + D[0], A8[part].c[1] + D[1], A8[part].c[2]] });
+  Object.assign(happy9.anatomy, {
+    body: { c: [-0.5, -0.72, 0], r: [1.08, 0.66, 0.94] },
+    belly: { c: [-0.1, -0.92, 0], r: [0.95, 0.46, 0.92] },
+    head: mv('head'), cheek: mv('cheek'), muzzle: mv('muzzle'), nose: mv('nose'), mouth: mv('mouth'), tooth: mv('tooth'), ear: mv('ear'),
+    tail: { ...A8.tail, c: [-1.55, -0.8, 0] },
+    // hind legs tucked under the rump, front legs under the chin, set a little wide so all four
+    // pink paws show from the side and the front; all soles at y = -1.54
+    leg: { a: [-0.86, -1.1, 0.56], b: [-0.82, -1.34, 0.6], r1: 0.14, r2: 0.085 },
+    foot: { c: [-0.74, -1.45, 0.62], r: [0.24, 0.09, 0.14] },
+    arm: { a: [0.52, -1.1, 0.42], b: [0.78, -1.34, 0.44], r1: 0.1, r2: 0.075 },
+    paw: { c: [0.9, -1.45, 0.46], r: [0.18, 0.09, 0.13] },
+  });
+}
+// a little less white on the body so the orange flanks carry the silhouette
+happy9.regions = { ...happy.regions, belly: [-0.5, 0.35, 0.3, 0.3] };
+happy9.wheelCenterX = 0.1; // rim's lowest point under the middle of the body (see floorC)
+happy9.run = {
+  ...happy.run, period: 0.17, bounce: 0.05, cheekJiggle: 0.12, earFlop: 0.2, earBounce: 0.3, headLag: 0.06,
+  scurry: { ...happy.run.scurry, step: 0.5, lift: 0.12, surge: 0.04, reach: { paw: 0.14, foot: -0.14 }, floorR: 2.82, floorC: 0.1 },
+};
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, brain };

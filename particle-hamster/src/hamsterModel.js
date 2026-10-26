@@ -703,8 +703,11 @@ const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
  * leans with its tip (a small rotation about the hip or shoulder) and is then translated so the
  * tip lands exactly on the path; the body's bob and surge are subtracted, so a planted paw never
  * leaves the floor or sinks into it.
- *   SC: { step, lift, duty, surge, phases: { footN, footF, pawN, pawF }, reach?: { paw, foot } }
- *   (phases in cycles; reach shifts the whole path forward/back, so the limb leans that way)
+ *   SC: { step, lift, duty, surge, phases: { footN, footF, pawN, pawF }, reach?: { paw, foot },
+ *         floorR?, floorC? }
+ *   (phases in cycles; reach shifts the whole path forward/back, so the limb leans that way;
+ *   floorR: the running surface is the inside of the wheel, a circle of that radius in model units
+ *   whose lowest point is under x = floorC, so paws far forward or back still touch it)
  */
 function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
   for (const tip of A.tips) {
@@ -721,6 +724,10 @@ function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
       y = SC.lift * Math.sin(Math.PI * s);
     }
     x = (x + (SC.reach?.[tip.name.slice(0, -1)] || 0)) * run; y *= run;
+    if (SC.floorR) {
+      const d = p0[0] + x - SC.floorC; // world x of the tip (the body's surge is already taken out)
+      y += SC.floorR - Math.sqrt(Math.max(0, SC.floorR * SC.floorR - d * d));
+    }
     const L = Math.hypot(p0[0] - pv[0], p0[1] - pv[1]);
     const th = Math.atan2(x, L);
     const c = Math.cos(th), sn = Math.sin(th), dx = p0[0] - pv[0], dy = p0[1] - pv[1];

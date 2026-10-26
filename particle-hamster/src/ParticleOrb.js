@@ -91,6 +91,7 @@ const VERTEX = /* glsl */ `
   uniform float uGain;
   uniform vec3 uLight;
   uniform vec3 uPal[5];
+  uniform vec4 uContact[4]; // xyz: unit direction of a paw/foot touching the shell, w: strength
   attribute float aSize;
   attribute float aSeed;
   attribute float aTone;
@@ -116,6 +117,17 @@ const VERTEX = /* glsl */ `
     float bt = mod(uTime * 0.9 + aSeed * 3.0, 5.5);
     float pop = uBurst * step(0.82, fract(aSeed * 7.13)) * exp(-bt * 1.6) * (1.0 - cos(min(bt * 6.0, 3.1416)));
     r *= 1.0 + 0.11 * pop;
+    // contact: where a paw presses the inside of the shell the points bulge out and light up, and a
+    // ring of light ripples away from the spot
+    float touch = 0.0;
+    for (int i = 0; i < 4; i++) {
+      vec4 c = uContact[i];
+      float d2 = max(0.0, 1.0 - dot(dir, c.xyz));
+      float hit = c.w * exp(-d2 * 70.0);
+      float ring = c.w * exp(-d2 * 14.0) * pow(0.5 + 0.5 * sin(sqrt(d2) * 55.0 - uTime * 9.0), 4.0);
+      r *= 1.0 + 0.06 * hit;
+      touch += hit + 0.7 * ring;
+    }
     vec3 p = dir * r;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     vec3 nv = normalize(normalMatrix * dir);
@@ -133,17 +145,17 @@ const VERTEX = /* glsl */ `
     float crescent = max(dot(normalize(nv.xy + 1e-4), lx), 0.0);
     float lum = 0.12 + 0.32 * lambert + limb * (0.04 + 0.95 * crescent * crescent) + 1.25 * band;
     float sparkle = step(0.985, fract(aSeed * 91.3)) * (0.6 + 0.4 * sin(uTime * 2.0 + aSeed * 50.0));
-    vColor = palette(aTone * 0.8 + band * 0.25) * (lum + sparkle) * uGain;
+    vColor = palette(aTone * 0.8 + band * 0.25 + touch * 0.4) * (lum + sparkle + 3.0 * touch) * uGain;
 
     // keep the character visible: only points facing the viewer AND over the middle of the orb
     // (where the hamster is) fade; the limb and the far side stay, so the orb keeps its volume
     vec4 cv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
     float centre = 1.0 - smoothstep(0.5, 0.86, length(mv.xy - cv.xy) / uRadius);
-    float front = smoothstep(0.0, 0.6, nv.z) * centre * uFrontFade;
+    float front = smoothstep(0.0, 0.6, nv.z) * centre * uFrontFade * (1.0 - clamp(touch * 2.0, 0.0, 1.0));
     // limb points pile up in screen space; thin them so additive light stays gold instead of white
-    vAlpha = (1.0 - front) * (0.3 + 0.7 * lane) * (0.5 + 0.5 * fract(aSeed * 13.7)) * (1.0 - 0.4 * aStray) * (1.0 - 0.25 * back) * (1.0 - 0.55 * limb);
+    vAlpha = (1.0 - front) * mix((0.3 + 0.7 * lane) * (1.0 - 0.55 * limb), 1.0, clamp(touch, 0.0, 1.0)) * (0.5 + 0.5 * fract(aSeed * 13.7)) * (1.0 - 0.4 * aStray) * (1.0 - 0.25 * back);
 
-    gl_PointSize = max(uMinSize, aSize * (1.0 + 0.6 * band) * uScale / -mv.z);
+    gl_PointSize = max(uMinSize, aSize * (1.0 + 0.6 * band + 1.2 * min(touch, 1.5)) * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -213,6 +225,7 @@ export class ParticleOrb extends THREE.Group {
       uGain: { value: s.gain },
       uLight: { value: new THREE.Vector3(...LIGHT) },
       uPal: { value: s.palette.map((c) => new THREE.Vector3(...c)) },
+      uContact: { value: Array.from({ length: 4 }, () => new THREE.Vector4(1, 0, 0, 0)) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -236,11 +249,30 @@ export class ParticleOrb extends THREE.Group {
     this.uniforms.uMinSize.value = Math.max(1, 0.8 * pixelRatio);
   }
 
-  /** @param {number} t seconds (the orb's own clock); motion 0..1 scales its autonomous movement */
-  update(t, motion = 1) {
+  /**
+   * @param {number} t seconds (the orb's own clock); motion 0..1 scales its autonomous movement
+   * @param {number} roll rad/s the shell rolls forward under a running hamster (0 = none)
+   */
+  update(t, motion = 1, roll = 0) {
     this.uniforms.uTime.value = t * motion;
-    this.spinner.rotation.y = t * this.style.spin * motion;
-    this.spinner.rotation.x = Math.sin(t * 0.13) * 0.12 * motion;
+    this.spinner.rotation.set(Math.sin(t * 0.13) * 0.12 * motion, t * this.style.spin * motion * (roll ? 0.3 : 1), -t * roll * motion);
+    this.spinner.updateMatrix();
+  }
+
+  /**
+   * Paw/foot contacts with the inner shell.
+   * @param {{p: number[], s: number}[]} list points in the orb's parent space and strengths 0..1
+   */
+  setContacts(list) {
+    const inv = this._inv || (this._inv = new THREE.Matrix4());
+    inv.copy(this.spinner.matrix).invert();
+    const v = this._v || (this._v = new THREE.Vector3());
+    this.uniforms.uContact.value.forEach((c, i) => {
+      const e = list[i];
+      if (!e || e.s <= 0) return c.set(1, 0, 0, 0);
+      v.set(e.p[0], e.p[1], e.p[2]).applyMatrix4(inv).normalize();
+      c.set(v.x, v.y, v.z, e.s);
+    });
   }
 
   dispose() {

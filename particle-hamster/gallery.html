@@ -24,6 +24,8 @@
       header { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 22px 16px 6px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
       header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; margin: 0; }
       header p { margin: 0; color: var(--faint); }
+      header .switch { margin-left: auto; color: var(--dim); text-decoration: none; border: 1px solid var(--line); padding: 5px 10px; border-radius: 999px; }
+      header .switch:hover, header .switch:focus-visible { color: var(--fg); border-color: rgba(255, 210, 150, 0.4); }
       main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 4px 16px 32px; }
       .row-label { color: var(--faint); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; margin: 16px 2px 8px; }
       .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -56,6 +58,7 @@
     <header>
       <h1>Hamster Gallery</h1>
       <p>Six live 3D dot hamsters. Drag to turn, tap to open.</p>
+      <a class="switch" href="./gallery-v3.html">See V3</a>
     </header>
     <main>
       <div class="row-label">Standalone</div>

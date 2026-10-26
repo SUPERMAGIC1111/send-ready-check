@@ -10,8 +10,42 @@ import { Orbit } from './orbit.js';
 import { CHARACTERS } from './characters.js';
 import { CAMERA } from './shading.js';
 import { loadHamster } from './loadHamster.js';
+import { limbTips, runPeriod } from './hamsterModel.js';
+
+const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
 
 export class HamsterStage {
+  /**
+   * Where to place a V3 hamster inside an orb of radius R so that, over one stride, the paws just
+   * reach the front of the shell and the feet just reach its floor, without the head, ears, nose or
+   * tail ever passing through it. Grid search over the offset in the side plane.
+   */
+  static solveContactOffset(character, R) {
+    const cfg = CHARACTERS[character], A = cfg.anatomy;
+    const period = runPeriod(character);
+    const paws = [], feet = [];
+    for (let k = 0; k < 24; k++) {
+      for (const { name, p } of limbTips((k / 24) * period, 1, character, true)) (name.startsWith('paw') ? paws : feet).push(p);
+    }
+    const body = [
+      [A.head.c[0], A.head.c[1] + A.head.r[1] + 0.25, 0], // crown
+      [A.ear.c[0], A.ear.c[1] + A.ear.r[1], A.ear.c[2]],
+      [A.nose.c[0] + A.nose.r[0] + 0.04, A.nose.c[1], 0],
+      [A.tail.c[0] - A.tail.r[0] - 0.12, A.tail.c[1], 0],
+      [A.head.c[0], A.head.c[1], A.head.r[2] + 0.12],
+    ];
+    const far = (pts, o) => Math.max(...pts.map((p) => Math.hypot(p[0] + o[0], p[1] + o[1], p[2])));
+    let best = null;
+    for (let ox = -1.2; ox <= 1.2; ox += 0.02)
+      for (let oy = -1.2; oy <= 1.2; oy += 0.02) {
+        const o = [ox, oy, 0];
+        const ep = far(paws, o) - (R - 0.04), ef = far(feet, o) - (R - 0.04), eb = Math.max(0, far(body, o) - (R - 0.08));
+        const cost = ep * ep + 0.6 * ef * ef + 20 * eb * eb + 0.02 * (ox * ox + oy * oy);
+        if (!best || cost < best.cost) best = { cost, o };
+      }
+    return best.o;
+  }
+
   /**
    * @param {THREE.WebGLRenderer} renderer shared renderer
    * @param {{character: string, orb?: boolean, reducedMotion?: boolean, time?: number}} opts
@@ -28,6 +62,9 @@ export class HamsterStage {
     this.orbit = new Orbit({ auto: !reducedMotion });
     this.orb = orb ? new ParticleOrb(CHARACTERS[character].orb) : null;
     if (this.orb) this.turntable.add(this.orb);
+    // V3 in an orb: the hamster runs against the inside of the shell, paws pressing the wall
+    this.contactMode = !!(this.orb && CHARACTERS[character].run.contact);
+    if (this.contactMode) this.contactOffset = HamsterStage.solveContactOffset(character, this.orb.style.radius);
     this.ascii = new AsciiPass(renderer);
     this.mode = 'dots';
     this.time = time;
@@ -41,6 +78,10 @@ export class HamsterStage {
     this.ready = loadHamster(character).then((layers) => {
       this.hamster = new ParticleHamster(layers, character);
       this.hamster.setSolid(this.mode === 'ascii');
+      if (this.contactMode) {
+        this.hamster.contact = true;
+        this.hamster.position.set(...this.contactOffset);
+      }
       this.turntable.add(this.hamster);
       this._applySize();
       if (this.intro.v < 1) animate(this.intro, { v: 1 }, { duration: 1.4, ease: [0.22, 1, 0.36, 1] });
@@ -79,7 +120,9 @@ export class HamsterStage {
     const cam = this.camera;
     cam.aspect = w / h;
     // frame the hamster (or the whole orb) on wide and narrow viewports alike
-    const halfH = this.orb ? 2.42 : 1.62, halfW = this.orb ? 2.42 : 1.8;
+    // V3 characters (giant heads, crown tufts) need a little more room than V2
+    const big = !!CHARACTERS[this.character].run.contact;
+    const halfH = this.orb ? 2.42 : big ? 1.95 : 1.62, halfW = this.orb ? 2.42 : big ? 2.05 : 1.8;
     const t = Math.tan((CAMERA.fov * Math.PI) / 360);
     const dist = Math.max(halfH / t, halfW / (t * cam.aspect));
     const zm = this.zoom; // optional QA close-up: { z, fx, fy }
@@ -100,7 +143,19 @@ export class HamsterStage {
       this.orbTime += this.reducedMotion ? 0 : dt;
     }
     this.hamster?.update(this.time, { run: this.runBlend.v, assemble: this.intro.v });
-    this.orb?.update(this.orbTime);
+    if (this.contactMode && this.hamster) {
+      const R = this.orb.style.radius, o = this.contactOffset;
+      const touch = this.hamster.tips().map(({ name, p }) => {
+        const q = [p[0] + o[0], p[1] + o[1], p[2] + o[2]];
+        const d = Math.hypot(...q);
+        const paw = name.startsWith('paw');
+        const s = smooth((d - (R - (paw ? 0.2 : 0.16))) / (paw ? 0.17 : 0.12)) * (paw ? 1 : 0.45) * this.runBlend.v * this.intro.v;
+        return { p: q, s };
+      });
+      this.orb.setContacts(touch);
+      this.contacts = touch;
+    }
+    this.orb?.update(this.orbTime, 1, this.contactMode ? this.runBlend.v * (this.reducedMotion ? 0 : 0.35) : 0);
   }
 
   /** draws into the renderer's current viewport/scissor; rect is that viewport (CSS px, bottom-left origin) */

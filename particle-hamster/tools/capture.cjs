@@ -21,6 +21,7 @@ const fs = require('node:fs');
     const page_ = query.startsWith('gallery') ? query : `index.html?${query}`;
     await page.goto(`${base}/${page_}`, { waitUntil: 'load' });
     await page.waitForFunction(() => document.querySelector('canvas')?.dataset.particles || document.body.dataset.ready, null, { timeout: 120000 });
+    if (process.env.NO_UI) await page.evaluate(() => document.getElementById('ui')?.remove());
     await page.waitForTimeout(Number(process.env.SETTLE || 1500));
     await page.screenshot({ path: path.join(outDir, `${name}.png`) });
     console.log('captured', name);

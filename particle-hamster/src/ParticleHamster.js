@@ -12,7 +12,7 @@
 // Surface dots are opaque, depth-tested discs (anti-aliased with alpha-to-coverage), so dense
 // silhouettes never blow out to white the way additive dots do; the fur is a soft blended shell.
 import * as THREE from 'three';
-import { BONES, poseMatrices } from './hamsterModel.js';
+import { BONES, poseMatrices, limbTips } from './hamsterModel.js';
 import { CHARACTERS } from './characters.js';
 import { LIGHT, ASCII, CAMERA, LOOK } from './shading.js';
 
@@ -214,6 +214,7 @@ export class ParticleHamster extends THREE.Group {
     super();
     this.name = 'ParticleHamster';
     this.character = CHARACTERS[character];
+    this.contact = false; // V3 inside an orb: paws press the inner shell
     this._boneData = new Float32Array(BONE_COUNT * 16);
     const shared = {
       uBones: { value: Array.from({ length: BONE_COUNT }, () => new THREE.Matrix4()) },
@@ -300,12 +301,19 @@ export class ParticleHamster extends THREE.Group {
 
   /** @param {number} t seconds; run 0..1 blends idle -> run; assemble 0..1 for the intro */
   update(t, { run = 1, assemble = 1 } = {}) {
-    poseMatrices(t, run, this._boneData, this.character);
+    poseMatrices(t, run, this._boneData, this.character, this.contact);
+    this._pose = { t, run };
     const bones = this.uniforms.uBones.value;
     for (let i = 0; i < BONE_COUNT; i++) bones[i].fromArray(this._boneData, i * 16);
     this.uniforms.uTime.value = t;
     this.uniforms.uRun.value = run;
     this.uniforms.uAssemble.value = assemble;
+  }
+
+  /** paw fingertips and foot soles of the current pose, in the hamster's own space */
+  tips() {
+    const { t = 0, run = 1 } = this._pose || {};
+    return limbTips(t, run, this.character, this.contact, this._boneData);
   }
 
   dispose() {

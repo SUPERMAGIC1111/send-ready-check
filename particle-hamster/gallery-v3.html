@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Hamster Gallery V3</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050505;
+        --card: #000;
+        --line: rgba(255, 255, 255, 0.07);
+        --fg: #f2e8dc;
+        --dim: rgba(242, 232, 220, 0.5);
+        --faint: rgba(242, 232, 220, 0.28);
+        --chip: rgba(255, 255, 255, 0.07);
+        --chip-on: rgba(255, 196, 120, 0.2);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--fg); }
+      body { font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+      #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; pointer-events: none; z-index: 0; }
+      header { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 22px 16px 6px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+      header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; margin: 0; }
+      header p { margin: 0; color: var(--faint); }
+      header .switch { margin-left: auto; color: var(--dim); text-decoration: none; border: 1px solid var(--line); padding: 5px 10px; border-radius: 999px; }
+      header .switch:hover, header .switch:focus-visible { color: var(--fg); border-color: rgba(255, 210, 150, 0.4); }
+      main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 4px 16px 32px; }
+      .row-label { color: var(--faint); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; margin: 16px 2px 8px; }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      @media (max-width: 860px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+      .demo { position: relative; aspect-ratio: 1 / 1; border-radius: 14px; border: 1px solid var(--line); background: transparent; touch-action: none; cursor: grab; outline: none; overflow: hidden; user-select: none; -webkit-user-select: none; }
+      .demo:active { cursor: grabbing; }
+      .demo:focus-visible { border-color: rgba(255, 210, 150, 0.45); }
+      .demo .label { position: absolute; left: 12px; bottom: 10px; display: flex; gap: 8px; align-items: baseline; pointer-events: none; text-shadow: 0 1px 8px #000; }
+      .demo .num { font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); }
+      .demo .name { font-weight: 600; }
+      .demo .kind { color: var(--faint); }
+      .demo .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--faint); letter-spacing: 0.08em; pointer-events: none; }
+      .demo .ctl { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; opacity: 0; transition: opacity 0.2s; }
+      .demo:hover .ctl, .demo:focus-within .ctl, .demo.focused .ctl { opacity: 1; }
+      @media (hover: none) { .demo .ctl { opacity: 1; } }
+      .ctl button { all: unset; cursor: pointer; font-size: 11px; padding: 5px 9px; border-radius: 999px; background: var(--chip); color: var(--dim); backdrop-filter: blur(6px); }
+      .ctl button:hover, .ctl button:focus-visible { color: var(--fg); outline: 1px solid rgba(255, 255, 255, 0.2); }
+      .ctl button[aria-pressed="true"] { background: var(--chip-on); color: var(--fg); }
+      .ctl .close { display: none; }
+      body.has-focus header, body.has-focus .row-label { visibility: hidden; }
+      body.has-focus .demo:not(.focused) { visibility: hidden; }
+      .demo.focused { position: fixed; inset: 12px; z-index: 5; aspect-ratio: auto; border-radius: 16px; }
+      .demo.focused .ctl .close { display: inline-block; }
+      .demo.focused .ctl .expand { display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <header>
+      <h1>Hamster Gallery V3</h1>
+      <p>Giant heads, huge cheeks, tiny feet. Drag to turn, tap to open.</p>
+      <a class="switch" href="./gallery.html">Compare with V2</a>
+    </header>
+    <main>
+      <div class="row-label">Standalone</div>
+      <section class="grid" aria-label="Standalone hamsters">
+        <article class="demo" id="d01" data-id="01" data-character="orangeV3" tabindex="0" aria-label="01 Giant-Head Orange hamster, standalone. Drag or use arrow keys to turn."></article>
+        <article class="demo" id="d02" data-id="02" data-character="purpleV3" tabindex="0" aria-label="02 Purple Thinking hamster, standalone. Drag or use arrow keys to turn."></article>
+        <article class="demo" id="d03" data-id="03" data-character="goldenV3" tabindex="0" aria-label="03 Golden Comedy hamster, standalone. Drag or use arrow keys to turn."></article>
+      </section>
+      <div class="row-label">Particle spheres</div>
+      <section class="grid" aria-label="Hamsters in particle spheres">
+        <article class="demo" id="d04" data-id="04" data-character="orangeV3" data-orb="1" tabindex="0" aria-label="04 Giant-Head Orange hamster in a golden particle sphere, paws pressing the shell."></article>
+        <article class="demo" id="d05" data-id="05" data-character="purpleV3" data-orb="1" tabindex="0" aria-label="05 Purple Thinking hamster in a pearl and lavender particle sphere, paws pressing the shell."></article>
+        <article class="demo" id="d06" data-id="06" data-character="goldenV3" data-orb="1" tabindex="0" aria-label="06 Golden Comedy hamster in a champagne gold particle sphere, paws pressing the shell."></article>
+      </section>
+    </main>
+    <script type="module" src="./src/gallery.js"></script>
+  </body>
+</html>

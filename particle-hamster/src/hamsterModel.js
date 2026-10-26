@@ -384,9 +384,12 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     x -= g[0] * d; y -= g[1] * d; z -= g[2] * d; // one Newton step onto the surface
     d = F.sdf(x, y, z);
     if (Math.abs(d) > 0.004) continue;
+    const carve = F.carve;
     let label = F.label();
     let name = anat.prims[label].name;
     if (!name.startsWith('tooth') && -F.carve > F.union - 0.004) { label = 2; name = 'mouth'; } // 2 = head
+    // lip line (V3): a thin dark rim just outside the opening, so the open smile reads from any angle
+    const lip = cfg.lip && name !== 'mouth' && !name.startsWith('tooth') && name !== 'nose' && carve >= 0 && carve < cfg.lip.width;
     const n = g;
     const pr = anat.prims[label];
     // skin weight between the primitive's bone and its parent
@@ -402,7 +405,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
       const band = boneB === B.head ? 0.22 : boneB === B.eyeN || boneB === B.eyeF ? 0.01 : boneB === B.cheekN || boneB === B.cheekF ? 0.14 : 0.09;
       w = name === 'mouth' ? 1 : smoothstep(-band * 0.5, band, dPar - dSelf);
     }
-    const reg = shade(name, [x, y, z], n, rnd);
+    const reg = lip ? { col: cfg.palette.lip, kind: KIND.FEATURE, fur: 0 } : shade(name, [x, y, z], n, rnd);
     const pt = { p: [x, y, z], n, col: reg.col, kind: reg.kind, fur: reg.fur, glow: reg.glow || 0, boneA, boneB, w, name };
     const s = (pt.r = spacingOf(pt));
     let grid = grids.get(s);
@@ -419,7 +422,8 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
   const nearFeature = (p) => {
     let m = 1;
     for (const e of anat.eyes) m = Math.min(m, smoothstep(e.r + 0.03, e.r + 0.18, dist(p, e.c)));
-    m = Math.min(m, smoothstep(0.12, 0.3, dist(p, anat.mouth.c)), smoothstep(0.06, 0.2, dist(p, anat.prims[4].c)));
+    const mr = Math.max(...anat.mouth.r);
+    m = Math.min(m, smoothstep(Math.max(0.12, mr * 0.9), Math.max(0.3, mr * 1.9), dist(p, anat.mouth.c)), smoothstep(0.06, 0.2, dist(p, anat.prims[4].c)));
     return m;
   };
   const combDir = (pt) => {
@@ -657,8 +661,10 @@ function poseV3(t, run, out, cfg, contact) {
     const sn = Math.sin(ph + off), cs = Math.cos(ph + off);
     const ang = run * (M.legBase + M.legAmp * sn); // + swings the foot forward, - pushes it back
     const rec = Math.max(0, cs); // forward recovery swing: fold and lift
-    const fold = 1 - run * M.legFold * rec;
-    const drop = legLen * (1 - Math.cos(ang)) * fold;
+    // fold on the forward recovery, cartoon-stretch on the push back (the foot kicks out behind)
+    const fold = 1 - run * M.legFold * rec + run * (M.legStretch || 0) * Math.max(0, -sn);
+    // keep the sole near the ground line: rigid-arc compensation minus the stretch's extra reach
+    const drop = legLen * (1 - Math.cos(ang)) - legLen * Math.max(0, fold - 1) * Math.cos(ang);
     rot[bone] = about(PV[bone], mul(R(0, 0, ang), stretch(legAxis, fold)), [run * 0.03 * sn, run * M.legLift * rec - drop, 0]);
   }
   // arms: opposite to the same-side leg

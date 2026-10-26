@@ -37,7 +37,7 @@ stage.orbit.attach(canvas);
 function resize() {
   const dpr = Math.min(devicePixelRatio || 1, 2);
   renderer.setPixelRatio(dpr);
-  renderer.setSize(innerWidth, innerHeight, false);
+  renderer.setSize(innerWidth, innerHeight); // also sets the CSS size, so hosts without our stylesheet still fit
   stage.resize(innerWidth, innerHeight, dpr);
 }
 addEventListener('resize', resize);

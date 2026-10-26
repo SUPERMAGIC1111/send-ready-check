@@ -415,4 +415,30 @@ const v11C = lowHamster('happyV11C', 'V11 C Speedy', { bx: -0.85, brx: 1.38, paw
   run: { period: 0.13, bounce: 0.03, squash: 0.05, cheekJiggle: 0.12, earBounce: 0.3,
     scurry: { ...SCL, step: 0.34, lift: 0.06, duty: 0.45, surge: 0.1, squash: true, lean: -0.03, reach: { paw: 0.08, foot: -0.1 } } } });
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, brain };
+// --- V12 silhouette: one continuous bean-shaped hamster after the low side-running reference. The
+// head is ~28% lower in height and sits low in front of the shoulders, blended deeply into a
+// compact torso that arches smoothly from forehead over back to a full, round rump (rear extension
+// ~40% shorter than V11). Cheeks, eyes, nose, smile, ears and tuft are kept; legs stay very short
+// and hidden, tiny pink paws close under the belly.
+const v12 = clone(v11B);
+Object.assign(v12, { id: 'happyV12', name: 'V12 Silhouette', wheelCenterX: -0.25 });
+{
+  const A9 = happy9.anatomy, H9 = A9.head.c, N = [0.66, -0.46, 0], k = 0.78;
+  const re = (c) => [N[0] + (c[0] - H9[0]) * k, N[1] + (c[1] - H9[1]) * k, c[2] * k];
+  const mv = (part, rk = k) => ({ ...A9[part], c: re(A9[part].c), r: A9[part].r.map((v) => v * rk) });
+  Object.assign(v12.anatomy, {
+    head: { ...A9.head, c: N, r: [A9.head.r[0] * 0.82, A9.head.r[1] * 0.72, A9.head.r[2] * 0.82], k: 0.5 },
+    cheek: mv('cheek', 0.8), muzzle: mv('muzzle', 0.9), nose: mv('nose', 0.95), mouth: mv('mouth', 0.9), tooth: mv('tooth', 0.9), ear: mv('ear', 0.85),
+    eye: { ...A9.eye, dist: A9.eye.dist * k, r: 0.215 },
+    body: { c: [-0.32, -0.8, 0], r: [0.76, 0.68, 0.84] },
+    belly: { c: [-0.2, -1.2, 0], r: [0.6, 0.26, 0.6] },
+    tail: { ...A9.tail, c: [-1.05, -0.82, 0], r: [0.19, 0.18, 0.18] },
+    leg: { a: [-0.7, -1.1, 0.46], b: [-0.7, -1.4, 0.5], r1: 0.1, r2: 0.07 },
+    foot: { c: [-0.7, -1.52, 0.5], r: [0.15, 0.045, 0.1] },
+    arm: { a: [0.3, -1.1, 0.44], b: [0.3, -1.4, 0.48], r1: 0.09, r2: 0.065 },
+    paw: { c: [0.3, -1.52, 0.48], r: [0.14, 0.045, 0.09] },
+  });
+}
+v12.run.scurry = { ...v12.run.scurry, floorC: -0.2 };
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, brain };

@@ -71,4 +71,6 @@ export const LAB_VARIANTS = [
   { id: 'v11A', label: 'V11 A Realistic', note: 'candidate', character: 'happyV11A', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   { id: 'v11B', label: 'V11 B Cute', note: 'candidate', character: 'happyV11B', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   { id: 'v11C', label: 'V11 C Speedy', note: 'candidate', character: 'happyV11C', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  // --- V12 silhouette check (side view first; V8-V11 above are unchanged)
+  { id: 'v12', label: 'V12 Silhouette', note: 'candidate', character: 'happyV12', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
 ];

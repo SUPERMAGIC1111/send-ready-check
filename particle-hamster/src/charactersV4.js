@@ -283,4 +283,36 @@ Object.assign(big, { id: 'voxelBigHead', name: 'Big-Head Voxel' });
 }
 big.run = { ...scurry.run, expression: 'surprise', glance: 0.07 };
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, brain };
+// --- Happy Hamster (texture lab, character design D), after Günter's two reference images: one
+// round pear-shaped ball, huge white cheeks, big friendly eyes, small pink nose, open happy smile
+// with two teeth, tiny round ears, a spiky orange crown tuft, very short legs, little pink paws.
+// Voxel V3's low body and scurry, with a reaching run: the front paws work further forward and
+// the hind paws further back (still planted on the rim, see scurryLimbs).
+const happy = clone(scurry);
+Object.assign(happy, { id: 'happyHamster', name: 'Happy Hamster' });
+{
+  const A3 = scurry.anatomy, H0 = A3.head.c, H1 = [H0[0] + 0.02, H0[1] + 0.12, 0];
+  const re = (c, k) => [H1[0] + (c[0] - H0[0]) * k, H1[1] + (c[1] - H0[1]) * k, c[2] * k];
+  const at = (part, k, rk = k) => ({ ...A3[part], c: re(A3[part].c, k), r: A3[part].r.map((v) => v * rk) });
+  Object.assign(happy.anatomy, {
+    // pear: the body widens to meet the big head, low and round
+    body: { c: [-0.32, -0.74, 0], r: [0.92, 0.74, 0.96] },
+    belly: { c: [-0.02, -0.96, 0], r: [0.84, 0.5, 0.94] },
+    head: { ...A3.head, c: H1, r: A3.head.r.map((v) => v * 1.12), k: 0.55 },
+    // huge cheeks: wider, lower, puffed out sideways
+    cheek: { ...A3.cheek, c: [H1[0] + 0.42, H1[1] - 0.5, 0.78], r: [0.72, 0.62, 0.66], k: 0.4 },
+    muzzle: at('muzzle', 1.12),
+    nose: at('nose', 1.12, 1.0),
+    mouth: { ...at('mouth', 1.12, 1.45), bend: 2.4, top: 0.5 },
+    tooth: { ...at('tooth', 1.12, 1.5) },
+    ear: { ...at('ear', 1.0, 0.72) },
+    eye: { ...A3.eye, dist: A3.eye.dist * 1.12, r: 0.26, azim: 28 },
+  });
+}
+// white face blaze, big white cheeks and a white belly, like the references
+happy.regions = { ...CHARACTERS_V3.orangeV3.regions, cheekCream: -0.18, blaze: [0.1, 0.3, 0.42] };
+happy.whiskers = { ...happy.whiskers, count: 0 };
+happy.fur = { ...happy.fur, crown: { ...happy.fur.crown, locks: 40, dots: 70, len: 0.5, fan: 1.5, lean: [-0.2], mess: 0.7, spread: 0.3, offset: [0.0, -0.1] } };
+happy.run = { ...scurry.run, expression: 'surprise', glance: 0.06, scurry: { ...scurry.run.scurry, step: 0.36, reach: { paw: 0.12, foot: -0.1 } } };
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, brain };

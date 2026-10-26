@@ -32,7 +32,9 @@ const fs = require('node:fs');
     for (const job of jobs) {
       const i = job.indexOf('=');
       const name = job.slice(0, i), query = job.slice(i + 1);
-      await page.goto(`${base}/lab.html?${query}`, { waitUntil: 'load' });
+      // leave the previous page first: a heavy scene in software GL can starve the next load
+      await page.goto('about:blank');
+      await page.goto(`${base}/lab.html?${query}`, { waitUntil: 'load', timeout: 180000 });
       await waitFor(new URLSearchParams(query).get('variant'));
       if (process.env.EVAL) await page.evaluate(process.env.EVAL);
       if (process.env.NO_UI) await page.evaluate(() => { for (const id of ['ui', 'picker']) document.getElementById(id)?.remove(); });

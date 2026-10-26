@@ -34,6 +34,7 @@ const VERTEX = /* glsl */ `
   varying float vFlag;
   varying vec3 vBend;    // view-space direction from the cube centre to this point (rounded voxels)
   varying vec3 vViewPos;
+  varying float vSeed;   // per-voxel random (plush fibres)
   void main() {
     mat4 A = uBones[int(aBoneA + 0.5)];
     mat4 B = uBones[int(aBoneB + 0.5)];
@@ -48,6 +49,7 @@ const VERTEX = /* glsl */ `
     vBend = normalMatrix * (R * position);
     vViewPos = (modelViewMatrix * vec4(p, 1.0)).xyz;
     vColor = aColor;
+    vSeed = fract(sin(dot(aCenter, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
     vKind = aKind;
     vFlag = aFlag;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -67,6 +69,8 @@ const FRAGMENT = /* glsl */ `
   uniform float uInner;     // soft internal light on the shadow side
   uniform float uCoreDark;  // body colour under a translucent layer (layered depth)
   uniform float uShellFace; // outer layer: 0 = no shell over the face; 1 = face rides on top, opaque
+  uniform float uIri;       // iridescent sheen at grazing angles
+  uniform float uPlush;     // plush: fine fibre texture on the faces, fibre fringe in the outer layer
   varying vec3 vColor;
   varying vec3 vNormal;
   varying vec3 vLocal;
@@ -74,6 +78,8 @@ const FRAGMENT = /* glsl */ `
   varying float vFlag;
   varying vec3 vBend;
   varying vec3 vViewPos;
+  varying float vSeed;
+  float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   void main() {
     vec3 n = normalize(vNormal);
     vec3 q = abs(vLocal) * 2.0;
@@ -99,6 +105,14 @@ const FRAGMENT = /* glsl */ `
       base = mix(uDeep, uLite, smoothstep(0.42, 0.78, l));
       base = mix(base, uHi, smoothstep(0.7, 0.86, l));
     }
+    // plush: a grid of fine fibre tufts on each voxel face (in the face's own plane)
+    float fib = 0.5;
+    if (uPlush > 0.0) {
+      vec2 uv = q.x >= max(q.y, q.z) ? vLocal.yz : (q.y >= q.z ? vLocal.xz : vLocal.xy);
+      fib = hash2(floor((uv + 0.5) * 6.0) + vSeed * 37.0);
+      if (vKind < 1.5) base *= 1.0 + uPlush * 0.3 * (fib - 0.5);
+    }
+    if (uIri > 0.0 && vKind < 1.5) base += uIri * fres * (0.5 + 0.5 * cos(6.2832 * (fres * 1.3 + vSeed * 0.15 + vec3(0.0, 0.33, 0.67)))) * 0.45;
     vec3 col;
     if (vKind > 2.5 && vKind < 3.5) col = vFlag > 0.5 ? vec3(1.0) : base * (0.9 + 0.2 * diff) + spec;
     else if (vKind > 3.5) col = base * (0.85 + 0.2 * diff) + 0.5 * spec;
@@ -109,6 +123,12 @@ const FRAGMENT = /* glsl */ `
       // them), or (uShellFace) ride on top of the translucent layer, opaque and glossy
       if (uShellFace < 0.5) discard;
       gl_FragColor = vec4(col * edge, 1.0);
+      return;
+    }
+    if (uPlush > 0.0) {
+      // fibre fringe: scattered opaque fibre tips just outside the surface (fuzzy edge, same silhouette)
+      if (fib < 0.62) discard;
+      gl_FragColor = vec4(base * (0.8 + 0.4 * diff) * 1.08, 1.0);
       return;
     }
     vec3 sc = mix(base * (0.75 + 0.4 * diff), vec3(1.0), 0.12) + spec + uRim * fres * mix(uHi, vec3(1.0), 0.3);
@@ -155,7 +175,9 @@ export class VoxelHamster extends THREE.Group {
       uRim: { value: S.rim ?? 0 },
       uInner: { value: S.inner ?? 0 },
       uCoreDark: { value: S.coreDark ?? 1 },
-      uShellFace: { value: S.shell ? 1 : 0 },
+      uShellFace: { value: S.shell && S.shell.face !== false ? 1 : 0 },
+      uIri: { value: S.iri ?? 0 },
+      uPlush: { value: S.plush ?? 0 },
     };
     const box = new THREE.BoxGeometry(1, 1, 1);
     const g = new THREE.InstancedBufferGeometry();

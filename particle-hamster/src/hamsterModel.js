@@ -703,7 +703,8 @@ const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
  * leans with its tip (a small rotation about the hip or shoulder) and is then translated so the
  * tip lands exactly on the path; the body's bob and surge are subtracted, so a planted paw never
  * leaves the floor or sinks into it.
- *   SC: { step, lift, duty, surge, phases: { footN, footF, pawN, pawF } }  (phases in cycles)
+ *   SC: { step, lift, duty, surge, phases: { footN, footF, pawN, pawF }, reach?: { paw, foot } }
+ *   (phases in cycles; reach shifts the whole path forward/back, so the limb leans that way)
  */
 function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
   for (const tip of A.tips) {
@@ -719,7 +720,7 @@ function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
       x = SC.step * (smooth01(s) - 0.5);
       y = SC.lift * Math.sin(Math.PI * s);
     }
-    x *= run; y *= run;
+    x = (x + (SC.reach?.[tip.name.slice(0, -1)] || 0)) * run; y *= run;
     const L = Math.hypot(p0[0] - pv[0], p0[1] - pv[1]);
     const th = Math.atan2(x, L);
     const c = Math.cos(th), sn = Math.sin(th), dx = p0[0] - pv[0], dy = p0[1] - pv[1];

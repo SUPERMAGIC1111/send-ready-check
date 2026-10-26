@@ -19,6 +19,11 @@ const bold = {
 // Brain Voxel's build: shared (same geometry, same cache entry) by the restyled brains
 const brainVoxelBuild = { brain: 'dots', brainOpts: { spacing: 0.03, candidates: 70000 }, voxel: 0.062 };
 
+// folded brain at a given voxel size (dots at half the voxel size, so every cell is filled)
+const sculptBuild = (v) => ({ brain: 'dots', brainOpts: { model: 'sculpt', spacing: v / 2, candidates: 90000 }, voxel: v });
+// Happy Hamster: solid microdots (no fur haze) with the crown tuft, voxelised together
+const happyBuild = { override: { ...fine, fur: { fluff: 0 } }, voxel: 0.036, voxelFur: true };
+
 export const LAB_VARIANTS = [
   { id: 'v4', label: 'V4 Orange', note: 'baseline', character: 'orangeV4', render: 'dots', build: {} },
   { id: 'voxel', label: 'Micro-Voxel', character: 'orangeLab', render: 'voxel', build: { override: fine, voxel: 0.042 } },
@@ -39,4 +44,17 @@ export const LAB_VARIANTS = [
       shell: { offset: 0.3, scale: 1.1, alpha: 0.22 } } },
   { id: 'bigHead', label: 'Big-Head Voxel', note: 'experimental', character: 'voxelBigHead', render: 'voxel', build: { override: fine, voxel: 0.034 },
     style: { round: 1.0, gloss: 0.18 } },
+  // --- character design round (V8): a recognisable folded brain (brainSculpt.js) in three
+  // treatments, and the Happy Hamster in two surfaces. Same renderer, styles only.
+  { id: 'brainSculptPink', label: 'Pink Folded Brain', note: 'experimental', character: 'brain', render: 'voxel', brain: true, build: sculptBuild(0.045),
+    style: { round: 0.9, gloss: 0.22 } },
+  { id: 'brainSculptJelly', label: 'Jelly Folded Brain', note: 'experimental', character: 'brain', render: 'voxel', brain: true, build: sculptBuild(0.045),
+    style: { tint: { deep: [0.78, 0.2, 0.36], light: [1.0, 0.62, 0.76], hi: [1.0, 0.84, 0.9] }, coreDark: 0.6, inner: 0.3, round: 0.6, gloss: 0.5, rim: 0.6,
+      shell: { offset: 0.45, scale: 1.2, alpha: 0.32 } } },
+  { id: 'brainSculptPurple', label: 'Purple Folded Brain', note: 'experimental', character: 'brain', render: 'voxel', brain: true, build: sculptBuild(0.036),
+    style: { tint: { deep: [0.26, 0.06, 0.48], light: [0.72, 0.5, 1.0], hi: [1.0, 0.62, 0.88] }, coreDark: 0.95, round: 1.0, gloss: 0.4, rim: 0.25, inner: 0.3, iri: 0.8 } },
+  { id: 'happyRound', label: 'Happy Hamster (rounded)', note: 'experimental', character: 'happyHamster', render: 'voxel', build: happyBuild,
+    style: { round: 1.0, gloss: 0.2 } },
+  { id: 'happyPlush', label: 'Happy Hamster (plush)', note: 'experimental', character: 'happyHamster', render: 'voxel', build: happyBuild,
+    style: { round: 0.5, plush: 1, shell: { offset: 0.32, scale: 1.08, alpha: 1, face: false } } },
 ];

@@ -160,9 +160,12 @@ export function brainShade(p, n, curves) {
  * Surface dots of the brain in the hamster pack format (all on the body bone).
  * @param {{spacing?: number, candidates?: number, eyeCandidates?: number, seed?: number, dotScale?: number}} opts
  */
-export function buildBrain({ spacing = 0.022, candidates = 170000, eyeCandidates = 14000, seed = 9, dotScale = 1.7 } = {}) {
+export const BRAIN_MODEL = { sdf: brainSdf, bodySdf: brainBodySdf, eyes: EYES, shade: brainShade, curves: faceCurves };
+
+export function buildBrain({ spacing = 0.022, candidates = 170000, eyeCandidates = 14000, seed = 9, dotScale = 1.7, model = BRAIN_MODEL } = {}) {
+  const { sdf: brainSdf, bodySdf: brainBodySdf, eyes: EYES, shade: brainShade } = model;
   const rnd = mulberry32(seed);
-  const curves = faceCurves();
+  const curves = model.curves();
   const pts = [], grid = new Set();
   const feat = spacing * 0.6;
   for (let i = 0; i < candidates; i++) {

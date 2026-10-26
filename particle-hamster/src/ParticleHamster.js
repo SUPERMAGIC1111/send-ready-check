@@ -121,6 +121,10 @@ const VERTEX = /* glsl */ `
   #ifdef GLOW
     grow *= ${LOOK.glowSize.toFixed(3)};
   #endif
+  #ifdef FUR
+    // ASCII source: long hair stays fine, so the coat makes a soft fringe instead of burying the face
+    if (uSolid > 0.5) grow = 0.8;
+  #endif
     gl_PointSize = max(uMinSize, aSize * grow * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }

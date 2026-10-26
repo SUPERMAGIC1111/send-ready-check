@@ -1,0 +1,15 @@
+PASS inertia after release drag -0.42 -> 0.91, release velocity 0.54 rad/s, +0.050 rad after release (4 fps)
+PASS all six demos built 983700 points
+info: 6.0 fps for all six demos in software GL (SwiftShader, no GPU)
+PASS mouse drag rotates the 3D scene yaw -0.38 -> 1.74, pitch 0.07 -> 0.32
+PASS run cycle keeps running during drag t 1.22 -> 1.57 (mid-drag) -> 1.87
+info: gallery inertia +0.004 rad (input is starved at ~8 fps in software GL; inertia is measured on index.html above)
+PASS touch drag rotates yaw -0.16 -> -1.72
+PASS reset returns to the side view yaw -0.420 (home -0.420)
+PASS idle auto-orbit turns slowly 0.160 rad/s
+PASS ASCII mode toggles 
+PASS pause stops the run blend 
+PASS tap expands a demo (deep link #06) 
+PASS Escape returns to all six 
+PASS deep link #02 opens focused 
+PASS no page errors 

@@ -20,10 +20,10 @@ const fs = require('node:fs');
     const name = job.slice(0, i), query = job.slice(i + 1);
     const page_ = query.startsWith('gallery') ? query : `index.html?${query}`;
     await page.goto(`${base}/${page_}`, { waitUntil: 'load' });
-    await page.waitForFunction(() => document.querySelector('canvas')?.dataset.particles || document.body.dataset.ready, null, { timeout: 120000 });
+    await page.waitForFunction(() => document.querySelector('canvas')?.dataset.particles || document.body.dataset.ready, null, { timeout: Number(process.env.WAIT || 300000) });
     if (process.env.NO_UI) await page.evaluate(() => document.getElementById('ui')?.remove());
     await page.waitForTimeout(Number(process.env.SETTLE || 1500));
-    await page.screenshot({ path: path.join(outDir, `${name}.png`) });
+    await page.screenshot({ path: path.join(outDir, `${name}.png`), timeout: Number(process.env.SHOT_TIMEOUT || 180000) });
     console.log('captured', name);
   }
   if (errors.length) console.log('PAGE ERRORS:', errors.slice(0, 8));

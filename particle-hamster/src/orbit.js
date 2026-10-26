@@ -38,7 +38,10 @@ export class Orbit {
     };
     const move = (e) => {
       if (!this.dragging || !last) return;
-      const now = e.timeStamp;
+      // browsers deliver one pointermove per frame; the coalesced list carries the real input
+      // times, so velocity (and the release check below) stay right on slow frames
+      const co = e.getCoalescedEvents?.();
+      const now = co && co.length ? co[co.length - 1].timeStamp : e.timeStamp;
       const rect = el.getBoundingClientRect();
       const k = 4.0 / Math.max(260, Math.min(rect.width, rect.height));
       const dx = e.clientX - last.x, dy = e.clientY - last.y;

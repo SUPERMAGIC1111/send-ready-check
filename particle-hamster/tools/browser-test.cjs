@@ -96,7 +96,8 @@ const fs = require('node:fs');
 
   // idle auto-orbit on 03 (untouched)
   const a0 = await st(2);
-  await page.waitForTimeout(2500);
+  // wait for animation time, not wall time: software GL can stall for seconds between frames
+  await page.waitForFunction((t) => window.__gallery[2].stage.time > t + 0.6, a0.time, { timeout: 120000 });
   const a1 = await st(2);
   const rate = (a1.yaw - a0.yaw) / Math.max(1e-3, a1.time - a0.time); // per simulated second (frame-rate independent)
   check('idle auto-orbit turns slowly', rate > 0.05 && rate < 0.5, `${rate.toFixed(3)} rad/s`);

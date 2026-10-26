@@ -12,10 +12,45 @@ and inside a Motion.dev-style particle sphere: six live, draggable experiences i
 | 05 | Purple Thinking | inside a pearl / lavender particle sphere |
 | 06 | Golden Comedy | inside a lively honey-gold sphere with playful scatter |
 
+## V3 (current)
+
+`gallery-v3.html` shows the V3 designs, drawn from `reference/v3/`, and links to the V2 gallery for
+comparison. V2 is unchanged.
+
+| Demo | Character | Experience |
+|---|---|---|
+| 01 | Giant-Head Orange: round fluffball, cinnamon-orange, huge white cheeks, small smile | standalone |
+| 02 | Purple Thinking: lavender/pearl, tall plush head, curious tilts and glances | standalone |
+| 03 | Golden Comedy: biggest head and cheeks, caramel, big grin and teeth, messy crown | standalone |
+| 04–06 | the same three, inside gold / pearl / champagne particle spheres, paws pressing the shell | sphere |
+
+The V3 designs live in `src/charactersV3.js`; the V3 parts of the model are opt-in, so V2 builds
+the same as before.
+- **Eyes:** flat and set into the head on the surface, with a big iris, two catch-lights and a
+  gentle cross-eye.
+- **Brows and whiskers:** brows sit on their own bones; whiskers are added as extra dots.
+- **Hair:** soft 4-dot locks, plus a thick crown tuft.
+- **Colour:** cream never dims to grey.
+- **Run cycle (`poseV3`):** the hind legs alternate with a push-off stretch, the arms pump,
+  and head, ears, cheeks and brows follow through.
+- **Spheres:** a solver places the hamster so its paws reach the inner shell. Each contact
+  lights up and ripples through `ParticleOrb`.
+
+ASCII is labelled β (experimental). The eyes, pink nose, paws and feet read, but the dense
+V3 coat makes the glyph image busy.
+
+Proof captures are in `captures/v3/` (real headless Chromium):
+- views from the side, 45°, front, left and back
+- run frames and GIFs
+- sphere paw contact
+- V2 vs V3
+- ASCII
+- the interaction test results
+
 ## Run
 
     npm install
-    npm run dev          # then open /gallery.html (all six) or /index.html?character=purple&orb=1
+    npm run dev          # then open /gallery-v3.html (V3), /gallery.html (V2) or /index.html?character=orangeV3&orb=1
 
 `gallery.html#01` … `#06` opens one demo full-window. In the gallery, drag a card to turn it,
 tap it to open it, and press Esc to go back. Hover a card for its controls: Running/Paused, Orbit

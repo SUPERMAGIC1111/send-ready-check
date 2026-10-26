@@ -25,7 +25,7 @@ const demos = [...document.querySelectorAll('.demo')].map((el) => {
     <div class="ctl" role="toolbar" aria-label="Controls for ${el.dataset.id}">
       <button data-act="run" aria-pressed="${stage.running}" title="Run / pause (Space)">${stage.running ? 'Running' : 'Paused'}</button>
       <button data-act="auto" aria-pressed="${stage.orbit.auto}" title="Slow automatic orbit when idle">Orbit</button>
-      <button data-act="ascii" aria-pressed="false" title="ASCII render mode (A)">ASCII</button>
+      <button data-act="ascii" aria-pressed="false" title="ASCII render mode, experimental (A)">ASCII β</button>
       <button data-act="reset" title="Back to the side view (R)">Reset</button>
       <button data-act="expand" class="expand" title="Open full window (Enter)">Expand</button>
       <button data-act="close" class="close" title="Back to all six (Esc)">Close</button>
@@ -42,6 +42,7 @@ function setFocus(demo) {
   for (const d of demos) d.el.classList.toggle('focused', d === demo);
   document.body.classList.toggle('has-focus', !!demo);
   focused = demo;
+  if (typeof resize === 'function') resize();
   const hash = demo ? `#${demo.id}` : ' ';
   if (location.hash !== hash) history.replaceState(null, '', demo ? hash : location.pathname + location.search);
   demo?.el.focus({ preventScroll: true });
@@ -92,8 +93,10 @@ addEventListener('hashchange', fromHash);
 fromHash();
 
 // ---- one loop, six scissored viewports
+// six live scenes at once: cap the pixel ratio a little lower than a single expanded demo
+// (the dense V3 coats are fill-rate heavy on laptop GPUs)
 function resize() {
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, focused ? 2 : 1.5));
   renderer.setSize(innerWidth, innerHeight, false);
 }
 addEventListener('resize', resize);

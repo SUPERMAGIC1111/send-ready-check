@@ -52,8 +52,12 @@ export class Orbit {
     };
     const up = (e) => {
       if (!this.dragging) return;
+      // frame-aligned pointermoves can be delivered after pointerup on slow frames: apply the
+      // final delta here, and only treat the release as "held still" if the pointer truly stopped
+      const moved = e && last && Math.hypot(e.clientX - last.x, e.clientY - last.y) > 1;
+      if (moved) move(e);
       this.dragging = false;
-      if ((e?.timeStamp ?? performance.now()) - (last?.t ?? 0) > 80) this.vYaw = this.vPitch = 0; // held still before release
+      if (!moved && (e?.timeStamp ?? performance.now()) - (last?.t ?? 0) > 120) this.vYaw = this.vPitch = 0;
       last = null;
       this.lastInput = performance.now();
     };

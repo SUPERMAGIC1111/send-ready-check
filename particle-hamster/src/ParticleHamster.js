@@ -124,6 +124,9 @@ const FRAGMENT = /* glsl */ `
     if (uSolid > 0.5) {
       // keep lit colours below the 8-bit clamp so colour survives the glyph pass
       float gain = ${ASCII.solidGain.toFixed(3)} * (abs(vKind - 1.0) < 0.5 ? ${ASCII.whiteFurGain.toFixed(3)} : 1.0);
+      // eyes become clean dark holes (blank cells) with only the catch-light left bright,
+      // so the face survives the glyph pass
+      if (abs(vKind - 3.0) < 0.5) gain = dot(vColor, vec3(0.33)) > 0.9 ? 1.0 : 0.0;
       gl_FragColor = vec4(vColor * gain, 1.0);
       return;
     }

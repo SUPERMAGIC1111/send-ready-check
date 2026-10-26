@@ -151,7 +151,8 @@ function renderAscii({ yaw, pitch = CAMERA.pitch, time = 0, run = 1, size = 840 
           if (Math.hypot(x + 0.5 - pr.sx, y + 0.5 - pr.sy) > r) continue;
           const k = y * W + x;
           // 8-bit render target on the GPU: colours clamp to 0..1
-          const g = ASCII.solidGain * (L.kind[i] === 1 ? ASCII.whiteFurGain : 1);
+          let g = ASCII.solidGain * (L.kind[i] === 1 ? ASCII.whiteFurGain : 1);
+          if (L.kind[i] === 3) g = (rgb[0] + rgb[1] + rgb[2]) / 3 > 0.9 ? 1 : 0; // eyes: dark holes + catch-light
           if (pr.depth < zb[k]) { zb[k] = pr.depth; col[k * 3] = Math.min(1, rgb[0] * g); col[k * 3 + 1] = Math.min(1, rgb[1] * g); col[k * 3 + 2] = Math.min(1, rgb[2] * g); }
         }
     }

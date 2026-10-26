@@ -113,7 +113,7 @@ function makeAnatomy(cfg) {
       ell('tooth' + N, 'head', mirror(A.tooth.c, s), A.tooth.r, 0.004)
     );
   }
-  const mouth = ell('mouth', 'head', A.mouth.c, A.mouth.r, 0);
+  const mouth = { ...ell('mouth', 'head', A.mouth.c, A.mouth.r, 0), bend: A.mouth.bend || 0, top: A.mouth.top || 1 };
   const pivots = BONES.map(() => [0, 0, 0]);
   pivots[B.body] = [A.body.c[0], A.body.c[1] - A.body.r[1] * 0.9, 0]; // squash from the ground
   pivots[B.head] = [HC[0] - 0.2, HC[1] - 0.3, 0];
@@ -134,6 +134,14 @@ function makeAnatomy(cfg) {
     for (const [c, r] of pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[k] - r); hi[k] = Math.max(hi[k], c[k] + r); }
   }
   return { HC, eyes, prims, mouth, pivots, bbox: { min: lo.map((v) => v - 0.05), max: hi.map((v) => v + 0.05) } };
+}
+
+// open happy mouth: a sideways "D" (flatter upper lip, round lower edge) bent into a smile, with
+// the corners curving up (y shifted by bend * z^2)
+function mouthDist(m, x, y, z) {
+  let dy = y - m.bend * z * z - m.c[1];
+  if (dy > 0) dy /= m.top;
+  return primDist(m, x, m.c[1] + dy, z) * (dy > 0 ? m.top : 1);
 }
 
 function primDist(pr, x, y, z) {
@@ -170,7 +178,7 @@ function makeField(anat) {
       else u = i === 0 ? di : smin(u, di, prims[i].k);
     }
     state.union = u;
-    state.carve = primDist(mouth, x, y, z);
+    state.carve = mouthDist(mouth, x, y, z);
     // carve the open mouth, then hang the two little teeth from its upper lip
     return Math.min(Math.max(u, -state.carve), teeth);
   };
@@ -215,8 +223,11 @@ function makeShader(cfg, anat) {
     };
 
     if (name === 'mouth') {
-      // inside of the open smile: pink tongue in the lower part, warm rose above (never black)
-      if (y < mouth.c[1] - mouth.r[1] * 0.15) return { col: C.tongue, kind: KIND.MOUTH, fur: 0 };
+      // inside of the open smile: a round pink tongue low in the mouth, deep warm rose behind it
+      // (never a black hole)
+      const yb = y - mouth.bend * z * z;
+      const tongue = Math.pow((yb - (mouth.c[1] - mouth.r[1] * 0.75)) / (mouth.r[1] * 0.62), 2) + Math.pow(z / (mouth.r[2] * 0.6), 2);
+      if (tongue < 1) return { col: mix3(C.tongue, C.pinkDeep, smoothstep(0.2, 1, tongue) * 0.4), kind: KIND.MOUTH, fur: 0 };
       return { col: C.mouthIn, kind: KIND.MOUTH, fur: 0 };
     }
     if (name.startsWith('eye')) {
@@ -227,8 +238,9 @@ function makeShader(cfg, anat) {
       const h1 = dot(dir, norm([eye.look[0] - 0.2, eye.look[1] + 0.55, eye.look[2] + 0.05 * eye.side]));
       const h2 = dot(dir, norm([eye.look[0] + 0.25, eye.look[1] - 0.35, eye.look[2] - 0.1 * eye.side]));
       if (h1 > cfg.eye.catch1 || h2 > cfg.eye.catch2) return { col: [1, 1, 1], kind: KIND.EYE, fur: 0, glow: 1 };
-      if (cl > 0.86) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
-      if (cl > cfg.eye.irisCos) return { col: mix3(C.iris, C.irisLight, smoothstep(0.1, -0.6, dot(dir, [0, 1, 0])) * 0.9), kind: KIND.EYE, fur: 0 };
+      if (cl > 0.9) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
+      // warm iris that glows lighter toward the bottom (the references' Pixar-style eyes)
+      if (cl > cfg.eye.irisCos) return { col: mix3(C.iris, C.irisLight, smoothstep(0.25, -0.7, dot(dir, [0, 1, 0]))), kind: KIND.EYE, fur: 0 };
       return { col: C.sclera, kind: KIND.EYE, fur: 0 };
     }
     if (name === 'nose') return { col: mix3(C.pink, C.pinkDeep, smoothstep(0.3, -0.6, n[1]) * 0.6), kind: KIND.SKIN, fur: 0 };
@@ -420,7 +432,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
       fur.push({
         p, n: norm([lean[0], 1, lean[2]]), col: mix3(cfg.palette.fur[2], tipCol, t), kind: KIND.FUR,
         boneA: B.head, boneB: B.crown, w: smoothstep(0, 0.6, t),
-        t, fleck: 0, seed: rnd(), size: D.fluffSize * (1.1 - 0.5 * t), alpha: 0.95 - 0.35 * t,
+        t, fleck: 0, seed: rnd(), size: D.fluffSize * (1.35 - 0.6 * t), alpha: 1 - 0.3 * t,
       });
     }
   }

@@ -10,7 +10,7 @@ import { Orbit } from './orbit.js';
 import { CHARACTERS } from './characters.js';
 import { CAMERA } from './shading.js';
 import { loadHamster } from './loadHamster.js';
-import { limbTips, runPeriod } from './hamsterModel.js';
+import { limbTips, runPeriod, runSpeed } from './hamsterModel.js';
 
 const smooth = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
 
@@ -50,7 +50,7 @@ export class HamsterStage {
    * @param {THREE.WebGLRenderer} renderer shared renderer
    * @param {{character: string, orb?: boolean, reducedMotion?: boolean, time?: number}} opts
    */
-  constructor(renderer, { character = 'orange', orb = false, reducedMotion = false, time = 0 } = {}) {
+  constructor(renderer, { character = 'orange', orb = false, wheel = false, reducedMotion = false, time = 0 } = {}) {
     this.renderer = renderer;
     this.character = character;
     this.reducedMotion = reducedMotion;
@@ -60,10 +60,24 @@ export class HamsterStage {
     this.turntable.position.y = CAMERA.lookY;
     this.scene.add(this.turntable);
     this.orbit = new Orbit({ auto: !reducedMotion });
-    this.orb = orb ? new ParticleOrb(CHARACTERS[character].orb) : null;
-    if (this.orb) this.turntable.add(this.orb);
+    // V4 wheel: the orb is the wheel. It turns about its own horizontal axle (local Z, which is
+    // the camera's view axis by default), so the rim is a vertical wheel seen from the side. The
+    // hamster sits in a separate, upright rig at the bottom of the rim and never rotates with it.
+    this.wheelMode = !!(wheel && orb);
+    this.wheel = new THREE.Group();
+    this.rig = new THREE.Group();
+    this.wheelAngle = 0;
+    this.wheelOmega = 0;
+    this.wheelScale = 1;
+    this.orb = orb ? new ParticleOrb(CHARACTERS[character].orb, { wheel: this.wheelMode }) : null;
+    if (this.wheelMode) {
+      this.turntable.add(this.wheel, this.rig);
+      this.wheel.add(this.orb);
+    } else if (this.orb) {
+      this.turntable.add(this.orb);
+    }
     // V3 in an orb: the hamster runs against the inside of the shell, paws pressing the wall
-    this.contactMode = !!(this.orb && CHARACTERS[character].run.contact);
+    this.contactMode = !!(this.orb && !this.wheelMode && CHARACTERS[character].run.contact);
     if (this.contactMode) this.contactOffset = HamsterStage.solveContactOffset(character, this.orb.style.radius);
     this.ascii = new AsciiPass(renderer);
     this.mode = 'dots';
@@ -78,15 +92,55 @@ export class HamsterStage {
     this.ready = loadHamster(character).then((layers) => {
       this.hamster = new ParticleHamster(layers, character);
       this.hamster.setSolid(this.mode === 'ascii');
-      if (this.contactMode) {
-        this.hamster.contact = true;
-        this.hamster.position.set(...this.contactOffset);
+      if (this.wheelMode) {
+        this._placeInWheel(layers);
+        this.rig.add(this.hamster);
+      } else {
+        if (this.contactMode) {
+          this.hamster.contact = true;
+          this.hamster.position.set(...this.contactOffset);
+        }
+        this.turntable.add(this.hamster);
       }
-      this.turntable.add(this.hamster);
       this._applySize();
       if (this.intro.v < 1) animate(this.intro, { v: 1 }, { duration: 1.4, ease: [0.22, 1, 0.36, 1] });
       return this;
     });
+  }
+
+  /**
+   * Size and place the hamster inside the wheel. The rig is scaled so the figure is ~56% of the
+   * wheel's inner height (the owner's brief: 50-60%), its feet rest on the bottom of the rim, and
+   * the wheel's angular speed is set so its inner surface moves at the ground speed of the run:
+   * omega = V / R.
+   */
+  _placeInWheel(layers) {
+    const R = this.orb.style.radius, Rin = R * 0.96;
+    const P = layers.core.position;
+    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < layers.core.count; i++) {
+      const x = P[i * 3], y = P[i * 3 + 1];
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    // lowest foot point over the whole stride, in model units
+    let floorY = Infinity;
+    for (let k = 0; k < 24; k++) {
+      for (const { name, p } of limbTips((k / 24) * runPeriod(this.character), 1, this.character, false)) {
+        if (name.startsWith('foot')) floorY = Math.min(floorY, p[1]);
+      }
+    }
+    const H = maxY - floorY;
+    const k = Math.min(1, (0.56 * 2 * Rin) / H);
+    this.wheelScale = k;
+    this.rig.scale.setScalar(k);
+    this.rig.position.set(-k * (minX + maxX) / 2, -Rin + 0.02 - k * floorY, 0);
+    this.hamster.setSizeK(k);
+    // ground speed of the run, scaled to this rig, in scene units per second; omega = V / R
+    this.wheelOmega = (runSpeed(this.character).speed * k) / R;
+    this.wheelRin = Rin;
+    this.wheelHeightFraction = (H * k) / (2 * Rin);
   }
 
   get particleCount() {
@@ -143,6 +197,27 @@ export class HamsterStage {
       this.orbTime += this.reducedMotion ? 0 : dt;
     }
     this.hamster?.update(this.time, { run: this.runBlend.v, assemble: this.intro.v });
+    if (this.wheelMode) {
+      // the wheel turns in response to running: clockwise (negative Z) so its inner surface moves
+      // backwards under a hamster who runs to the right
+      if (!this.paused) this.wheelAngle -= this.wheelOmega * dt * this.runBlend.v;
+      this.wheel.rotation.z = this.wheelAngle;
+      // subtle footfall highlights: where a planted foot meets the rim, in the wheel's own frame
+      if (this.hamster && this.runBlend.v > 0.01) {
+        const Rin = this.wheelRin, back = new THREE.Matrix4().makeRotationZ(-this.wheelAngle);
+        const v = new THREE.Vector3();
+        const touch = [];
+        for (const { name, p } of this.hamster.tips()) {
+          if (!name.startsWith('foot')) continue;
+          const gap = this.rig.position.y + this.wheelScale * p[1] + Rin; // distance above the rim floor
+          if (gap > 0.14) continue;
+          const s = (1 - smooth(gap / 0.14)) * 0.35 * this.runBlend.v;
+          v.set(this.rig.position.x + this.wheelScale * p[0], -Rin, 0).applyMatrix4(back);
+          touch.push({ p: [v.x, v.y, v.z], s });
+        }
+        this.orb.setContacts(touch);
+      }
+    }
     if (this.contactMode && this.hamster) {
       const R = this.orb.style.radius, o = this.contactOffset;
       const touch = this.hamster.tips().map(({ name, p }) => {

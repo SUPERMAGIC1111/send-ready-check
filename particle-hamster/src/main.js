@@ -15,7 +15,7 @@ const character = CHARACTERS[params.get('character')] ? params.get('character') 
 // opaque canvas: dot fragments write alpha < 1, which an alpha canvas would composite washed-out
 const renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: true, powerPreference: 'high-performance' });
 renderer.setClearColor(0x000000, 1);
-const stage = new HamsterStage(renderer, { character, orb: params.get('orb') === '1', reducedMotion, time: Number(params.get('t') || 0) });
+const stage = new HamsterStage(renderer, { character, orb: params.get('orb') === '1' || params.get('wheel') === '1', wheel: params.get('wheel') === '1', reducedMotion, time: Number(params.get('t') || 0) });
 if (params.has('view')) {
   stage.orbit.yaw = stage.orbit.home.yaw = VIEWS[params.get('view')] ?? VIEWS.side;
 }

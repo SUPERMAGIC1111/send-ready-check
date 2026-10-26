@@ -765,6 +765,40 @@ export function limbTips(t, run = 1, character = 'orange', contact = false, bone
 }
 
 /**
+ * Ground speed of a character's run, in model units per second.
+ * While a foot is planted it slides backwards relative to the body by D over a stance of duration
+ * duty*T, so the body (and the ground it must push against) moves at D / (duty * T). Averaged over
+ * both feet. This is the speed the wheel's inner surface has to match.
+ * @returns {{speed: number, stride: number, duty: number}}
+ */
+export function runSpeed(character = 'orange', samples = 96) {
+  const T = runPeriod(character);
+  const feet = new Map();
+  for (let k = 0; k < samples; k++) {
+    for (const { name, p } of limbTips((k / samples) * T, 1, character, false)) {
+      if (!name.startsWith('foot')) continue;
+      if (!feet.has(name)) feet.set(name, []);
+      feet.get(name).push(p);
+    }
+  }
+  let speed = 0, stride = 0, duty = 0, n = 0;
+  for (const pts of feet.values()) {
+    const yMin = Math.min(...pts.map((p) => p[1]));
+    const stance = pts.filter((p) => p[1] < yMin + 0.1);
+    const xs = stance.map((p) => p[0]);
+    const D = Math.max(...xs) - Math.min(...xs);
+    const f = stance.length / pts.length;
+    if (D > 0 && f > 0) {
+      speed += D / (f * T);
+      stride += D;
+      duty += f;
+      n++;
+    }
+  }
+  return n ? { speed: speed / n, stride: stride / n, duty: duty / n } : { speed: 0, stride: 0, duty: 0 };
+}
+
+/**
  * Skinning matrices for every bone at time t (seconds).
  * run: 0 = standing/idle, 1 = full run (blendable). The cycle loops exactly every run.period.
  * contact: V3 characters inside the orb press the inner shell with their paws.

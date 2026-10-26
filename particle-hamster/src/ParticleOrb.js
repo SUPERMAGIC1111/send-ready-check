@@ -88,6 +88,7 @@ const VERTEX = /* glsl */ `
   uniform float uBand;
   uniform float uBurst;
   uniform float uFrontFade;
+  uniform float uWheel; // 1 = wheel mode: a rim band with spokes around the axle (local Z)
   uniform float uGain;
   uniform vec3 uLight;
   uniform vec3 uPal[5];
@@ -144,6 +145,10 @@ const VERTEX = /* glsl */ `
     vec2 lx = normalize(uLight.xy);
     float crescent = max(dot(normalize(nv.xy + 1e-4), lx), 0.0);
     float lum = 0.12 + 0.32 * lambert + limb * (0.04 + 0.95 * crescent * crescent) + 1.25 * band;
+    // the wheel's rim: points near the equator perpendicular to the axle, with 8 spokes, so the spin reads
+    float rimBand = (1.0 - smoothstep(0.0, 0.3, abs(dir.z))) * uWheel;
+    float spoke = pow(max(cos(atan(dir.y, dir.x) * 8.0), 0.0), 2.0);
+    lum += rimBand * (1.2 + 1.4 * spoke);
     float sparkle = step(0.985, fract(aSeed * 91.3)) * (0.6 + 0.4 * sin(uTime * 2.0 + aSeed * 50.0));
     vColor = palette(aTone * 0.8 + band * 0.25 + touch * 0.4) * (lum + sparkle + 3.0 * touch) * uGain;
 
@@ -153,7 +158,7 @@ const VERTEX = /* glsl */ `
     float centre = 1.0 - smoothstep(0.5, 0.86, length(mv.xy - cv.xy) / uRadius);
     float front = smoothstep(0.0, 0.6, nv.z) * centre * uFrontFade * (1.0 - clamp(touch * 2.0, 0.0, 1.0));
     // limb points pile up in screen space; thin them so additive light stays gold instead of white
-    vAlpha = (1.0 - front) * mix((0.3 + 0.7 * lane) * (1.0 - 0.55 * limb), 1.0, clamp(touch, 0.0, 1.0)) * (0.5 + 0.5 * fract(aSeed * 13.7)) * (1.0 - 0.4 * aStray) * (1.0 - 0.25 * back);
+    vAlpha = (1.0 - front) * mix((0.3 + 0.7 * lane) * (1.0 - 0.55 * limb), 1.0, clamp(touch, 0.0, 1.0)) * (0.5 + 0.5 * fract(aSeed * 13.7)) * (1.0 - 0.4 * aStray) * (1.0 - 0.25 * back) * mix(1.0, 0.3 + 0.7 * rimBand, uWheel);
 
     gl_PointSize = max(uMinSize, aSize * (1.0 + 0.6 * band + 1.2 * min(touch, 1.5)) * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
@@ -208,9 +213,10 @@ function orbGeometry(style, seed = 11) {
 }
 
 export class ParticleOrb extends THREE.Group {
-  constructor(styleName = 'gold') {
+  constructor(styleName = 'gold', { wheel = false } = {}) {
     super();
     this.name = 'ParticleOrb';
+    this.wheel = wheel;
     this.style = ORB_STYLES[styleName];
     const s = this.style;
     this.uniforms = {
@@ -222,6 +228,7 @@ export class ParticleOrb extends THREE.Group {
       uBand: { value: s.band },
       uBurst: { value: s.burst },
       uFrontFade: { value: s.frontFade },
+      uWheel: { value: wheel ? 1 : 0 },
       uGain: { value: s.gain },
       uLight: { value: new THREE.Vector3(...LIGHT) },
       uPal: { value: s.palette.map((c) => new THREE.Vector3(...c)) },
@@ -255,7 +262,12 @@ export class ParticleOrb extends THREE.Group {
    */
   update(t, motion = 1, roll = 0) {
     this.uniforms.uTime.value = t * motion;
-    this.spinner.rotation.set(Math.sin(t * 0.13) * 0.12 * motion, t * this.style.spin * motion * (roll ? 0.3 : 1), -t * roll * motion);
+    if (this.wheel) {
+      // wheel mode: the rotation belongs to the wheel group, so the shell itself stays put
+      this.spinner.rotation.set(0, 0, 0);
+    } else {
+      this.spinner.rotation.set(Math.sin(t * 0.13) * 0.12 * motion, t * this.style.spin * motion * (roll ? 0.3 : 1), -t * roll * motion);
+    }
     this.spinner.updateMatrix();
   }
 

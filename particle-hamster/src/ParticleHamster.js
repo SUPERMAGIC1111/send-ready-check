@@ -27,6 +27,7 @@ const VERTEX = /* glsl */ `
   uniform float uMinSize;
   uniform float uAssemble;
   uniform float uDotScale;
+  uniform float uSizeK; // dots shrink with the hamster's rig scale (V4 wheel)
   uniform float uFocus;
   uniform float uSolid;
   uniform float uWhiteFloor;
@@ -125,7 +126,7 @@ const VERTEX = /* glsl */ `
     // ASCII source: long hair stays fine, so the coat makes a soft fringe instead of burying the face
     if (uSolid > 0.5) grow = 0.8;
   #endif
-    gl_PointSize = max(uMinSize, aSize * grow * uScale / -mv.z);
+    gl_PointSize = max(uMinSize, aSize * grow * uSizeK * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -239,6 +240,7 @@ export class ParticleHamster extends THREE.Group {
       uRun: { value: 1 },
       uScale: { value: 800 },
       uMinSize: { value: 1 },
+      uSizeK: { value: 1 },
       uAssemble: { value: 1 },
       uDotScale: { value: 1 },
       uSolid: { value: 0 },
@@ -298,6 +300,11 @@ export class ParticleHamster extends THREE.Group {
   setPointScale(bufferHeight, fovDeg, pixelRatio = 1) {
     this.uniforms.uScale.value = bufferHeight / (2 * Math.tan((fovDeg * Math.PI) / 360));
     this.uniforms.uMinSize.value = Math.max(1, 0.9 * pixelRatio);
+  }
+
+  /** uniform scale of the hamster rig (V4 wheel): dots scale with it so the figure stays crisp */
+  setSizeK(k) {
+    this.uniforms.uSizeK.value = k;
   }
 
   /** camera distance used for the subtle depth fade */

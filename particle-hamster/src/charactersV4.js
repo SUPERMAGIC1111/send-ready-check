@@ -378,4 +378,41 @@ Object.assign(v10C, { id: 'happyV10C', name: 'V10 C Speedy' });
 v10C.run = { ...happy9.run, period: 0.15, bounce: 0.06, squash: 0.04, cheekJiggle: 0.12, earBounce: 0.3, headLag: 0.08,
   scurry: { ...SC10, step: 0.38, lift: 0.09, duty: 0.34, surge: 0.02, squash: true, lean: -0.05, reach: { paw: 0.16, foot: -0.18 }, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } } };
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, brain };
+// --- V11 "low scurry": a different silhouette, not rescaled legs. V9's head, face, cheeks and
+// tuft on a long, low, horizontal torso with a rounded rump that flows into the shoulders. No
+// hanging belly: the underside sits just above the running surface. The four legs are very short
+// and live inside the fur; only tiny pink paws show below it when planted, and a lifted paw tucks
+// up into the fur. Front paws sit under the chest, hind paws under the rump, close together
+// around the lowest point of the wheel, so the curved rim barely lifts them.
+function lowHamster(id, name, { bx, brx, paw, foot, run }) {
+  const h = clone(happy9);
+  Object.assign(h, { id, name, wheelCenterX: -0.25 });
+  Object.assign(h.anatomy, {
+    // rounded rump: taller than it is low-slung, so the back arches from the head over the hips
+    body: { c: [bx, -0.9, 0], r: [brx, 0.56, 0.86] },
+    belly: { c: [bx + 0.3, -1.08, 0], r: [brx * 0.7, 0.3, 0.72] },
+    tail: { ...happy9.anatomy.tail, c: [bx - brx + 0.12, -0.92, 0] },
+    leg: { a: [-0.95, -1.18, 0.5], b: [-0.95, -1.36, 0.56], r1: 0.1, r2: 0.07 },
+    foot: { c: [-0.95, -1.5, 0.56], r: foot },
+    arm: { a: [0.35, -1.18, 0.46], b: [0.4, -1.36, 0.5], r1: 0.09, r2: 0.065 },
+    paw: { c: [0.42, -1.5, 0.5], r: paw },
+  });
+  h.regions = { ...happy9.regions, belly: [-0.9, 0.3, 0.2, 0.2] };
+  h.run = { ...happy9.run, ...run };
+  return h;
+}
+const SCL = { floorR: 2.82, floorC: -0.25, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } };
+// A: realistic low runner: legs almost invisible, tiny quick steps
+const v11A = lowHamster('happyV11A', 'V11 A Realistic', { bx: -0.75, brx: 1.2, paw: [0.12, 0.04, 0.08], foot: [0.13, 0.04, 0.09],
+  run: { period: 0.14, bounce: 0.02, squash: 0, cheekJiggle: 0.08, earBounce: 0.2,
+    scurry: { ...SCL, step: 0.3, lift: 0.05, duty: 0.55, surge: 0.03, reach: { paw: 0.04, foot: -0.05 } } } });
+// B: cute stylised: tiny visible paws, soft bounce
+const v11B = lowHamster('happyV11B', 'V11 B Cute', { bx: -0.75, brx: 1.2, paw: [0.17, 0.065, 0.11], foot: [0.18, 0.065, 0.12],
+  run: { period: 0.17, bounce: 0.05, squash: 0.06, cheekJiggle: 0.16, earFlop: 0.25, earBounce: 0.35,
+    scurry: { ...SCL, step: 0.38, lift: 0.08, duty: 0.5, surge: 0.04, squash: true, reach: { paw: 0.06, foot: -0.07 } } } });
+// C: speedy: longer body that stretches forward and back, very short limbs
+const v11C = lowHamster('happyV11C', 'V11 C Speedy', { bx: -0.85, brx: 1.38, paw: [0.13, 0.045, 0.085], foot: [0.14, 0.045, 0.09],
+  run: { period: 0.13, bounce: 0.03, squash: 0.05, cheekJiggle: 0.12, earBounce: 0.3,
+    scurry: { ...SCL, step: 0.34, lift: 0.06, duty: 0.45, surge: 0.1, squash: true, lean: -0.03, reach: { paw: 0.08, foot: -0.1 } } } });
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, brain };

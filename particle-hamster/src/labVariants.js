@@ -67,4 +67,8 @@ export const LAB_VARIANTS = [
   { id: 'v10A', label: 'V10 A Scurry', note: 'candidate', character: 'happyV10A', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   { id: 'v10B', label: 'V10 B Cartoon Dash', note: 'candidate', character: 'happyV10B', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   { id: 'v10C', label: 'V10 C Speedy', note: 'candidate', character: 'happyV10C', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  // --- V11 low scurry: new silhouette (V8, V9 and V10 above are unchanged)
+  { id: 'v11A', label: 'V11 A Realistic', note: 'candidate', character: 'happyV11A', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v11B', label: 'V11 B Cute', note: 'candidate', character: 'happyV11B', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v11C', label: 'V11 C Speedy', note: 'candidate', character: 'happyV11C', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
 ];

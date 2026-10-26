@@ -16,6 +16,9 @@ const bold = {
   fur: { fluff: 0, crown: { locks: 12, dots: 30 } },
 };
 
+// Brain Voxel's build: shared (same geometry, same cache entry) by the restyled brains
+const brainVoxelBuild = { brain: 'dots', brainOpts: { spacing: 0.03, candidates: 70000 }, voxel: 0.062 };
+
 export const LAB_VARIANTS = [
   { id: 'v4', label: 'V4 Orange', note: 'baseline', character: 'orangeV4', render: 'dots', build: {} },
   { id: 'voxel', label: 'Micro-Voxel', character: 'orangeLab', render: 'voxel', build: { override: fine, voxel: 0.042 } },
@@ -26,5 +29,14 @@ export const LAB_VARIANTS = [
   { id: 'rocket', label: 'Purple Rocket', character: 'purpleRocket', render: 'sculpt', build: { override: fine } },
   { id: 'brainSmooth', label: 'Brain Smooth', character: 'brain', render: 'mesh', brain: true, build: { brain: 'field' } },
   { id: 'brainDots', label: 'Brain Dots', character: 'brain', render: 'sculpt', brain: true, build: { brain: 'dots' } },
-  { id: 'brainVoxel', label: 'Brain Voxel', character: 'brain', render: 'voxel', brain: true, build: { brain: 'dots', brainOpts: { spacing: 0.03, candidates: 70000 }, voxel: 0.062 } },
+  { id: 'brainVoxel', label: 'Brain Voxel', character: 'brain', render: 'voxel', brain: true, build: brainVoxelBuild },
+  // --- creative experiments (V7): the same voxel renderer with a style, no new renderer
+  { id: 'brainJelly', label: 'Pink Jelly Brain', note: 'experimental', character: 'brain', render: 'voxel', brain: true, build: brainVoxelBuild,
+    style: { tint: { deep: [0.93, 0.36, 0.6], light: [1.0, 0.64, 0.8], hi: [1.0, 0.86, 0.93] }, coreDark: 0.62, inner: 0.35, round: 0.35, gloss: 0.7, rim: 1.0,
+      shell: { offset: 0.55, scale: 1.3, alpha: 0.3 } } },
+  { id: 'brainPurple', label: 'Purple Magic Brain', note: 'experimental', character: 'brain', render: 'voxel', brain: true, build: brainVoxelBuild,
+    style: { tint: { deep: [0.32, 0.1, 0.56], light: [0.74, 0.54, 1.0], hi: [1.0, 0.62, 0.88] }, coreDark: 0.9, round: 0.95, gloss: 0.45, rim: 0.45, inner: 0.4,
+      shell: { offset: 0.3, scale: 1.1, alpha: 0.22 } } },
+  { id: 'bigHead', label: 'Big-Head Voxel', note: 'experimental', character: 'voxelBigHead', render: 'voxel', build: { override: fine, voxel: 0.034 },
+    style: { round: 1.0, gloss: 0.18 } },
 ];

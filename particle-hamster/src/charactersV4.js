@@ -261,4 +261,26 @@ scurry.run = sprint({
   scurry: { step: 0.34, lift: 0.075, duty: 0.5, surge: 0.025, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } },
 });
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, brain };
+// --- Big-head Voxel (texture lab, creative experiment C): Voxel V3's body, legs and scurry with
+// the head, cheeks and face about 20% bigger (scaled about the head centre, which moves up so the
+// bigger head sits on the body instead of sinking into it) and slightly bigger, friendlier eyes.
+const big = clone(scurry);
+Object.assign(big, { id: 'voxelBigHead', name: 'Big-Head Voxel' });
+{
+  const HS = 1.2, A3 = scurry.anatomy, H0 = A3.head.c, H1 = [H0[0] + 0.06, H0[1] + 0.16, 0];
+  const re = (c) => [H1[0] + (c[0] - H0[0]) * HS, H1[1] + (c[1] - H0[1]) * HS, c[2] * HS];
+  const grow = (part, k = HS) => ({ ...A3[part], c: re(A3[part].c), r: A3[part].r.map((v) => v * k) });
+  Object.assign(big.anatomy, {
+    head: { ...A3.head, c: H1, r: A3.head.r.map((v) => v * HS) },
+    cheek: grow('cheek'),
+    muzzle: grow('muzzle'),
+    nose: grow('nose'),
+    mouth: grow('mouth'),
+    tooth: grow('tooth'),
+    ear: grow('ear', 1.12),
+    eye: { ...A3.eye, dist: A3.eye.dist * HS, r: 0.245 },
+  });
+}
+big.run = { ...scurry.run, expression: 'surprise', glance: 0.07 };
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, brain };

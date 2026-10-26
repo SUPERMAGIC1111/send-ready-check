@@ -110,7 +110,7 @@ export class HamsterStage {
       this.layers = layers;
       const render = variant?.render || 'dots';
       this.hamster =
-        render === 'voxel' ? new VoxelHamster(layers.voxel, character)
+        render === 'voxel' ? new VoxelHamster(layers.voxel, character, variant?.style)
         : render === 'mesh' ? new BrainMesh(layers.field)
         : new ParticleHamster(layers, character, { sculpt: render === 'sculpt' });
       this.hamster.setSolid(this.mode === 'ascii');

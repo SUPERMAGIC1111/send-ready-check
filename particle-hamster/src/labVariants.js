@@ -73,4 +73,15 @@ export const LAB_VARIANTS = [
   { id: 'v11C', label: 'V11 C Speedy', note: 'candidate', character: 'happyV11C', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   // --- V12 silhouette check (side view first; V8-V11 above are unchanged)
   { id: 'v12', label: 'V12 Silhouette', note: 'candidate', character: 'happyV12', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  // --- V13 silhouette comparison (ten anatomies; V8-V12 above are unchanged)
+  { id: 'v13_01', label: 'V13 01', note: 'silhouette', character: 'happyV13_01', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_02', label: 'V13 02', note: 'silhouette', character: 'happyV13_02', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_03', label: 'V13 03', note: 'silhouette', character: 'happyV13_03', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_04', label: 'V13 04', note: 'silhouette', character: 'happyV13_04', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_05', label: 'V13 05', note: 'silhouette', character: 'happyV13_05', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_06', label: 'V13 06', note: 'silhouette', character: 'happyV13_06', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_07', label: 'V13 07', note: 'silhouette', character: 'happyV13_07', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_08', label: 'V13 08', note: 'silhouette', character: 'happyV13_08', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_09', label: 'V13 09', note: 'silhouette', character: 'happyV13_09', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v13_10', label: 'V13 10', note: 'silhouette', character: 'happyV13_10', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
 ];

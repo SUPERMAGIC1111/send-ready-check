@@ -441,4 +441,48 @@ Object.assign(v12, { id: 'happyV12', name: 'V12 Silhouette', wheelCenterX: -0.25
 }
 v12.run.scurry = { ...v12.run.scurry, floorC: -0.2 };
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, brain };
+// --- V13: ten anatomies of the V12 hamster for a silhouette comparison. One factory; each entry sets
+// body (centre, radii), head (position, face scale k, head radii multipliers), cheek size, eye, ear
+// size and the rump. Body bottom is always ~0.09 above the running surface; paws sit under the
+// chest and under the rump, around the lowest point of the wheel. Face parts keep V9's design.
+function hamsterV13(n, name, P) {
+  const A9 = happy9.anatomy, H9 = A9.head.c, k = P.k, N = P.head;
+  const re = (c) => [N[0] + (c[0] - H9[0]) * k, N[1] + (c[1] - H9[1]) * k, c[2] * k];
+  const mv = (part, rk = k) => ({ ...A9[part], c: re(A9[part].c), r: A9[part].r.map((v) => v * rk) });
+  const [bx, by] = P.body.c, [rx, ry, rz] = P.body.r;
+  const pawX = bx + 0.55 * rx, footX = bx - 0.55 * rx, z = 0.55 * rz;
+  const h = clone(v11B);
+  // centre the whole animal (tail end to nose tip) under the wheel's lowest point, not just the body
+  Object.assign(h, { id: 'happyV13_' + n, name, wheelCenterX: (bx - rx + N[0] + A9.head.r[0] * P.hr[0] + 0.15) / 2 });
+  Object.assign(h.anatomy, {
+    head: { ...A9.head, c: N, r: [A9.head.r[0] * P.hr[0], A9.head.r[1] * P.hr[1], A9.head.r[2] * P.hr[2]], k: P.headK ?? 0.5 },
+    cheek: mv('cheek', P.cheek), muzzle: mv('muzzle', P.muz ?? 0.9), nose: mv('nose', 0.95), mouth: mv('mouth', 0.9), tooth: mv('tooth', 0.9),
+    ear: mv('ear', P.ear ?? 0.85),
+    eye: { ...A9.eye, dist: A9.eye.dist * k, r: P.eyeR },
+    body: { c: [bx, by, 0], r: [rx, ry, rz] },
+    belly: P.rump ? { c: P.rump.c, r: P.rump.r } : { c: [bx + 0.1, by - 0.2, 0], r: [rx * 0.55, ry * 0.45, rz * 0.6] },
+    tail: { ...A9.tail, c: [bx - rx + 0.08, by + 0.04, 0], r: [0.17, 0.16, 0.16] },
+    leg: { a: [footX, by - 0.1, z], b: [footX, -1.4, z + 0.04], r1: 0.1, r2: 0.07 },
+    foot: { c: [footX, -1.52, z + 0.04], r: [0.15, 0.045, 0.1] },
+    arm: { a: [pawX, by - 0.1, z - 0.03], b: [pawX, -1.4, z + 0.01], r1: 0.09, r2: 0.065 },
+    paw: { c: [pawX, -1.52, z + 0.01], r: [0.14, 0.045, 0.09] },
+  });
+  h.run.scurry = { ...h.run.scurry, floorC: (pawX + footX) / 2, ...(P.scurry || {}) };
+  return h;
+}
+const bodyAt = (bx, rx, ry, rz) => ({ c: [bx, -1.45 + ry, 0], r: [rx, ry, rz] });
+const V13 = {
+  '01': ['01 Classic Golden', { body: bodyAt(-0.4, 0.95, 0.48, 0.62), head: [0.62, -0.78, 0], k: 0.62, hr: [0.78, 0.62, 0.7], cheek: 0.7, eyeR: 0.2 }],
+  '02': ['02 Baby Chubby', { body: bodyAt(-0.3, 0.8, 0.55, 0.7), head: [0.6, -0.7, 0], k: 0.75, hr: [0.85, 0.7, 0.85], cheek: 0.95, eyeR: 0.25 }],
+  '03': ['03 Speed Runner', { body: bodyAt(-0.55, 1.2, 0.43, 0.55), head: [0.8, -0.88, 0], k: 0.55, hr: [0.7, 0.55, 0.62], cheek: 0.6, eyeR: 0.17, ear: 0.75 }],
+  '04': ['04 Cartoon Reference', { body: bodyAt(-0.45, 1.05, 0.5, 0.62), head: [0.75, -0.8, 0], k: 0.6, hr: [0.75, 0.62, 0.7], cheek: 0.7, eyeR: 0.17 }],
+  '05': ['05 Realistic Syrian', { body: bodyAt(-0.5, 1.0, 0.5, 0.62), head: [0.7, -0.8, 0], k: 0.55, hr: [0.68, 0.58, 0.62], cheek: 0.5, eyeR: 0.15, ear: 0.8 }],
+  '06': ['06 Tiny Explorer', { body: bodyAt(-0.35, 0.82, 0.44, 0.55), head: [0.62, -0.74, 0], k: 0.58, hr: [0.74, 0.6, 0.66], cheek: 0.62, eyeR: 0.2, ear: 1.0 }],
+  '07': ['07 Round & Low', { body: bodyAt(-0.35, 0.88, 0.46, 0.7), head: [0.6, -0.85, 0], k: 0.68, hr: [0.82, 0.68, 0.78], cheek: 0.85, eyeR: 0.22 }],
+  '08': ['08 Stretchy Scurry', { body: bodyAt(-0.6, 1.3, 0.4, 0.5), head: [0.85, -0.9, 0], k: 0.52, hr: [0.68, 0.52, 0.6], cheek: 0.55, eyeR: 0.16, ear: 0.75 }],
+  '09': ['09 Premium Mascot', { body: bodyAt(-0.4, 0.9, 0.52, 0.66), head: [0.62, -0.74, 0], k: 0.7, hr: [0.8, 0.66, 0.76], cheek: 0.85, eyeR: 0.23 }],
+  '10': ["10 Joe's Redemption", { body: bodyAt(-0.45, 0.98, 0.5, 0.64), head: [0.72, -0.8, 0], k: 0.6, hr: [0.74, 0.6, 0.68], cheek: 0.72, eyeR: 0.2, rump: { c: [-1.0, -1.04, 0], r: [0.42, 0.42, 0.52] } }],
+};
+const v13 = Object.fromEntries(Object.entries(V13).map(([n, [name, P]]) => ['happyV13_' + n, hamsterV13(n, name, P)]));
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, ...v13, brain };

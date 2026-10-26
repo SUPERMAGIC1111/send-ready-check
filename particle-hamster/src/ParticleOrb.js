@@ -25,6 +25,11 @@ export const ORB_STYLES = {
     palette: [[0.86, 0.5, 0.12], [1.0, 0.64, 0.2], [1.0, 0.76, 0.34], [0.98, 0.84, 0.56], [1.0, 0.92, 0.76]],
     count: 24000, radius: 2.1, size: 0.022, spin: 0.12, turbulence: 0.05, strays: 0.07, band: 1.1, burst: 1, frontFade: 0.9, gain: 1.05,
   },
+  // V3-C - champagne gold: paler, creamier gold than 04, lively with playful scatter
+  champagne: {
+    palette: [[0.82, 0.58, 0.24], [0.96, 0.74, 0.38], [1.0, 0.84, 0.56], [0.98, 0.9, 0.74], [1.0, 0.96, 0.88]],
+    count: 24000, radius: 2.1, size: 0.022, spin: 0.11, turbulence: 0.05, strays: 0.07, band: 1.0, burst: 1, frontFade: 0.9, gain: 1.0,
+  },
 };
 
 // Ashima/Stefan Gustavson 3D simplex noise (MIT)

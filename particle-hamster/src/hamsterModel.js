@@ -59,9 +59,9 @@ export function noise3(x, y, z) {
 }
 
 // ---------------------------------------------------------------- rig
-export const BONES = ['body', 'head', 'earN', 'earF', 'armN', 'armF', 'legN', 'legF', 'tail', 'cheekN', 'cheekF', 'crown', 'eyeN', 'eyeF'];
+export const BONES = ['body', 'head', 'earN', 'earF', 'armN', 'armF', 'legN', 'legF', 'tail', 'cheekN', 'cheekF', 'crown', 'eyeN', 'eyeF', 'browN', 'browF'];
 const B = Object.fromEntries(BONES.map((n, i) => [n, i]));
-const PARENT = BONES.map((n) => B[{ head: 'body', earN: 'head', earF: 'head', cheekN: 'head', cheekF: 'head', crown: 'head', eyeN: 'head', eyeF: 'head' }[n] ?? 'body']);
+const PARENT = BONES.map((n) => B[{ head: 'body', earN: 'head', earF: 'head', cheekN: 'head', cheekF: 'head', crown: 'head', eyeN: 'head', eyeF: 'head', browN: 'head', browF: 'head' }[n] ?? 'body']);
 
 // material kinds -> fur behaviour and shading
 export const KIND = { FUR: 0, WHITE_FUR: 1, SKIN: 2, EYE: 3, FEATURE: 4, MOUTH: 5 };
@@ -126,6 +126,7 @@ function makeAnatomy(cfg) {
     pivots[B['leg' + N]] = mirror(A.leg.a, s);
     pivots[B['cheek' + N]] = mirror(A.cheek.c, s);
     pivots[B['eye' + N]] = eyes[s > 0 ? 0 : 1].c;
+    pivots[B['brow' + N]] = add(eyes[s > 0 ? 0 : 1].c, [0, A.eye.r * 1.4, 0]);
   }
   // bounding box of the anatomy (rest pose) with a margin
   const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
@@ -133,7 +134,16 @@ function makeAnatomy(cfg) {
     const pts = p.type === 'e' ? [[p.c, Math.max(...p.r)]] : [[p.a, p.r1], [p.b, p.r2]];
     for (const [c, r] of pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[k] - r); hi[k] = Math.max(hi[k], c[k] + r); }
   }
-  return { HC, eyes, prims, mouth, pivots, bbox: { min: lo.map((v) => v - 0.05), max: hi.map((v) => v + 0.05) } };
+  // limb tips (rest pose): paw fingertips and the soles of the feet, for contact with the orb
+  const tips = [1, -1].flatMap((s) => {
+    const N = s > 0 ? 'N' : 'F';
+    const armDir = norm([A.paw.c[0] - A.arm.a[0], A.paw.c[1] - A.arm.a[1], 0]);
+    return [
+      { name: 'paw' + N, bone: B['arm' + N], p: add(mirror(A.paw.c, s), armDir, A.paw.r[0] * 0.9) },
+      { name: 'foot' + N, bone: B['leg' + N], p: add(mirror(A.foot.c, s), [A.foot.r[0] * 0.3, -A.foot.r[1], 0]) },
+    ];
+  });
+  return { HC, eyes, prims, mouth, pivots, tips, bbox: { min: lo.map((v) => v - 0.05), max: hi.map((v) => v + 0.05) } };
 }
 
 // open happy mouth: a sideways "D" (flatter upper lip, round lower edge) bent into a smile, with
@@ -238,6 +248,16 @@ function makeShader(cfg, anat) {
       const h1 = dot(dir, norm([eye.look[0] - 0.2, eye.look[1] + 0.55, eye.look[2] + 0.05 * eye.side]));
       const h2 = dot(dir, norm([eye.look[0] + 0.25, eye.look[1] - 0.35, eye.look[2] - 0.1 * eye.side]));
       if (h1 > cfg.eye.catch1 || h2 > cfg.eye.catch2) return { col: [1, 1, 1], kind: KIND.EYE, fur: 0, glow: 1 };
+      if (cfg.eye.style === 'pixar') {
+        // big white sclera, iris with a dark outer ring and a warm glow at the bottom, round pupil
+        if (cl > cfg.eye.pupilCos) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
+        if (cl > cfg.eye.irisCos) {
+          const ring = smoothstep(cfg.eye.irisCos + 0.025, cfg.eye.irisCos, cl);
+          const low = smoothstep(0.2, -0.6, dot(dir, [0, 1, 0]) - eye.look[1]);
+          return { col: mix3(mix3(C.iris, C.irisLight, low), C.irisRing, ring * 0.8), kind: KIND.EYE, fur: 0 };
+        }
+        return { col: mix3(C.sclera, C.scleraShade, smoothstep(0.3, -0.5, cl)), kind: KIND.EYE, fur: 0 };
+      }
       if (cl > 0.9) return { col: C.pupil, kind: KIND.EYE, fur: 0 };
       // warm iris that glows lighter toward the bottom (the references' Pixar-style eyes)
       if (cl > cfg.eye.irisCos) return { col: mix3(C.iris, C.irisLight, smoothstep(0.25, -0.7, dot(dir, [0, 1, 0]))), kind: KIND.EYE, fur: 0 };
@@ -261,7 +281,8 @@ function makeShader(cfg, anat) {
     // soft dark rim around each eye (like the references' lash line) so the bead reads
     for (const e of eyes) {
       const de = dist(p, e.c);
-      if (de < e.r + cfg.eye.rim && dot(n, e.gaze) > -0.3) return { col: C.eyeRim, kind: KIND.FEATURE, fur: 0 };
+      const upper = cfg.eye.style !== 'pixar' || p[1] - e.c[1] > -e.r * 0.15;
+      if (upper && de < e.r + cfg.eye.rim && dot(n, e.gaze) > -0.3) return { col: C.eyeRim, kind: KIND.FEATURE, fur: 0 };
     }
     if (name === 'muzzle') return cream(0.25);
     if (name.startsWith('cheek')) {
@@ -291,7 +312,7 @@ function makeShader(cfg, anat) {
     }
     if (name.startsWith('arm')) return orange(0.55);
     if (name.startsWith('leg')) return orange(0.6);
-    if (name === 'tail') return orange(0.9);
+    if (name === 'tail') return orange(cfg.fur.tail ?? 0.9);
     return orange();
   };
 }
@@ -338,13 +359,24 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     return D.body;
   };
 
+  // cells around the eyes, mouth and nose get extra candidates (D.featureCandidates), so the
+  // finely spaced facial features are fully covered instead of showing gaps
+  const featureCells = [];
+  if (D.featureCandidates) {
+    const spots = [...anat.eyes.map((e) => [e.c, e.r + 0.06]), [anat.mouth.c, Math.max(...anat.mouth.r) + 0.08], [anat.prims[4].c, Math.max(...anat.prims[4].r) + 0.06]];
+    for (let c = 0; c < cells.length; c += 3) {
+      const q = [cells[c] + size[0] / 2, cells[c + 1] + size[1] / 2, cells[c + 2] + size[2] / 2];
+      if (spots.some(([cc, r]) => dist(q, cc) < r + 0.04)) featureCells.push(c);
+    }
+  }
   // grids per spacing class: keep the first (random) candidate that lands in each cell
   const grids = new Map();
   const core = [];
   const candidates = Math.round(D.candidates);
+  const extra = featureCells.length ? Math.round(D.featureCandidates) : 0;
   let tries = 0;
-  while (tries++ < candidates) {
-    const c = Math.floor(rnd() * nCells) * 3;
+  while (tries++ < candidates + extra) {
+    const c = tries > candidates ? featureCells[Math.floor(rnd() * featureCells.length)] : Math.floor(rnd() * nCells) * 3;
     let x = cells[c] + rnd() * size[0], y = cells[c + 1] + rnd() * size[1], z = cells[c + 2] + rnd() * size[2];
     let d = F.sdf(x, y, z);
     if (Math.abs(d) > 0.02) continue;
@@ -417,9 +449,9 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
   for (let l = 0; l < CR.locks; l++) {
     const a = (l / CR.locks - 0.5) * CR.fan + (rnd() - 0.5) * 0.25;
     const base = add(top, [Math.sin(a * 0.6) * 0.12 + (rnd() - 0.5) * 0.1, -Math.abs(a) * 0.05, Math.sin(a) * 0.16]);
-    const lean = norm([CR.lean[0] + (rnd() - 0.5) * CR.mess, 1, Math.sin(a) * 0.8 + (rnd() - 0.5) * CR.mess]);
+    const lean = norm([CR.lean[0] + (rnd() - 0.5) * CR.mess, 1, Math.sin(a) * 0.8 + (CR.asym || 0) + (rnd() - 0.5) * CR.mess]);
     const len = CR.len * (0.7 + rnd() * 0.5);
-    const tipCol = mix3(cfg.palette.furHi, cfg.palette.furTip, rnd());
+    const tipCol = CR.tone ? mix3(cfg.palette.fur[3], cfg.palette.furHi, rnd() * 0.6) : mix3(cfg.palette.furHi, cfg.palette.furTip, rnd());
     for (let k = 0; k < CR.dots; k++) {
       const t = Math.pow(k / (CR.dots - 1), 0.9);
       const curl = CR.curl * t * t;
@@ -430,16 +462,69 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
         base[2] + lean[2] * len * t + (rnd() - 0.5) * spread,
       ];
       fur.push({
-        p, n: norm([lean[0], 1, lean[2]]), col: mix3(cfg.palette.fur[2], tipCol, t), kind: KIND.FUR,
+        p, n: norm([lean[0], 1, lean[2]]), col: mix3(CR.tone ? cfg.palette.fur[1] : cfg.palette.fur[2], tipCol, t), kind: KIND.FUR,
         boneA: B.head, boneB: B.crown, w: smoothstep(0, 0.6, t),
-        t, fleck: 0, seed: rnd(), size: D.fluffSize * (1.35 - 0.6 * t), alpha: 1 - 0.3 * t,
+        t, fleck: 0, seed: rnd(), size: D.fluffSize * (CR.size || 1.35) * (1 - 0.45 * t), alpha: 1 - 0.3 * t,
       });
+    }
+  }
+
+  // brows (V3): arcs of overlapping dark dots just above the head surface, on their own bones so
+  // they can lift with expressions; opaque, so they read as a solid dark stroke over the fur
+  if (cfg.brows) {
+    const BR = cfg.brows;
+    for (const eye of anat.eyes) {
+      const side = norm(cross([0, 1, 0], eye.gaze));
+      const upv = cross(eye.gaze, side);
+      const bone = eye.side > 0 ? B.browN : B.browF;
+      const steps = Math.round(BR.len / 0.012);
+      for (let k = 0; k <= steps; k++) {
+        const u = -1 + (2 * k) / steps; // u < 0 toward the face centre when side points outward
+        const inner = u > 0 ? 1 : 0; // +u runs toward the nose for both eyes
+        const lift = BR.height + BR.arch * (1 - u * u) + BR.tilt * (inner ? 1 : -1) * Math.abs(u);
+        for (const row of [-1, 0, 1]) {
+          const thick = BR.thick * (1 - 0.55 * Math.abs(u)) * row;
+          let q = add(add(add(eye.c, upv, (lift + thick) * eye.r), side, u * BR.len * 0.5 * eye.side), eye.gaze, eye.r * 0.2);
+          for (let it = 0; it < 4; it++) {
+            const d0 = F.sdf(...q);
+            const g0 = F.gradient(...q);
+            q = add(q, g0, -d0);
+          }
+          const n0 = F.gradient(...q);
+          core.push({
+            p: add(q, n0, 0.018), n: n0, col: mix3(cfg.palette.brow, cfg.palette.browHi, (row + 1) * 0.15),
+            kind: KIND.FEATURE, fur: 0, glow: 0, boneA: B.head, boneB: bone, w: 1, name: 'brow', r: BR.dot,
+          });
+        }
+      }
+    }
+  }
+  // whiskers (V3): fine strands of tiny pale dots fanning out of the muzzle sides
+  if (cfg.whiskers) {
+    const WK = cfg.whiskers;
+    const mz = anat.prims[3];
+    for (const s of [1, -1]) {
+      for (let w = 0; w < WK.count; w++) {
+        const fan = (w / (WK.count - 1) - 0.5) * WK.fan;
+        const root = [mz.c[0] - mz.r[0] * 0.15, mz.c[1] + fan * 0.12, s * mz.r[2] * 0.95];
+        const dir = norm([0.35 - Math.abs(fan) * 0.3, fan * 0.6 + 0.05, s * 1]);
+        const len = WK.len * (0.85 + 0.3 * rnd());
+        for (let k = 1; k <= WK.dots; k++) {
+          const t = k / WK.dots;
+          fur.push({
+            p: [root[0] + dir[0] * len * t - 0.25 * len * t * t, root[1] + dir[1] * len * t - WK.droop * len * t * t, root[2] + dir[2] * len * t],
+            n: [0, 0, s], col: cfg.palette.whisker, kind: KIND.WHITE_FUR,
+            boneA: B.head, boneB: B.head, w: 1, t, fleck: 0, seed: rnd(), size: WK.size * (1 - 0.4 * t), alpha: WK.alpha * (1 - 0.5 * t),
+          });
+        }
+      }
     }
   }
 
   for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.025) pt.sparkle = 1;
   // cream dots a touch larger: less black between bright dots, so pale fur reads soft, not grainy
-  const sizeOf = (pt) => (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.WHITE_FUR ? 1.08 : 1) * pt.r * D.dotScale;
+  // eyeFill (V3): eye dots overlap so the sclera and iris read as solid, glossy surfaces
+  const sizeOf = (pt) => (pt.name === 'brow' ? pt.r / D.dotScale : (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.EYE ? D.eyeFill || 1 : pt.kind === KIND.WHITE_FUR ? 1.08 : 1) * pt.r) * D.dotScale;
   const out = {
     id: cfg.id,
     core: pack(core, sizeOf, () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),
@@ -534,13 +619,108 @@ const bump = (t, every, dur, offset = 0) => {
   return x < dur ? Math.sin((x / dur) * Math.PI) : 0;
 };
 
+// scale by k along unit axis d (cartoon limb stretch)
+function stretch(d, k) {
+  const m = I4();
+  for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r] = (r === c ? 1 : 0) + (k - 1) * d[r] * d[c];
+  return m;
+}
+const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+
+/**
+ * V3 gait: a bouncy little gallop. Hind legs alternate with a long push-back (the foot extends
+ * behind the body) and a folded, lifted recovery; arms pump forward with a cartoon stretch.
+ * contact = true (inside the orb): the arms reach up-forward and press the inner shell in turn.
+ */
+function poseV3(t, run, out, cfg, contact) {
+  const M = cfg.run, A = anatomyOf(cfg), PV = A.pivots, an = cfg.anatomy;
+  const TAU = Math.PI * 2;
+  const ph = (t / M.period) * TAU;
+  const breathe = Math.sin(t * 2.2) * 0.012 * (1 - run);
+  const bounce = 0.5 - 0.5 * Math.cos(2 * ph - 0.6);
+  const sq = run * M.squash * Math.cos(2 * ph - 0.6);
+  const rot = [];
+  rot[B.body] = about(PV[B.body], R(0, 0, run * (M.lean + M.pitch * Math.sin(2 * ph + 0.4))), [0, run * M.bounce * bounce + breathe, 0], [1 + sq * 0.5, 1 - sq, 1 + sq * 0.5]);
+  // head: follow-through a beat behind the body, personality tilt/turn
+  const expr = bump(t, M.expressionEvery, 1.2, 0.3);
+  const tilt = M.tilt * Math.sin(t * M.tiltSpeed) + M.tilt * 0.6 * bump(t, M.tiltEvery, 1.6, 0.5);
+  rot[B.head] = about(PV[B.head], R(tilt, M.turn * Math.sin(t * 0.7), -run * M.headLag * Math.sin(2 * ph - 0.5) + 0.02 * (1 - run) * Math.sin(t * 0.9)), [0, -run * 0.03 * bounce, 0]);
+  // ears bounce a beat later still
+  const earLag = Math.sin(2 * ph - 2.0);
+  const perk = M.earPerk * expr;
+  rot[B.earN] = about(PV[B.earN], R(run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
+  rot[B.earF] = about(PV[B.earF], R(-run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
+  // hind legs: alternate (half a stride apart)
+  const legLen = Math.hypot(an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1]) + an.foot.r[1];
+  const legAxis = norm([an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1], 0]);
+  for (const [bone, off] of [[B.legN, 0], [B.legF, Math.PI]]) {
+    const sn = Math.sin(ph + off), cs = Math.cos(ph + off);
+    const ang = run * (M.legBase + M.legAmp * sn); // + swings the foot forward, - pushes it back
+    const rec = Math.max(0, cs); // forward recovery swing: fold and lift
+    const fold = 1 - run * M.legFold * rec;
+    const drop = legLen * (1 - Math.cos(ang)) * fold;
+    rot[bone] = about(PV[bone], mul(R(0, 0, ang), stretch(legAxis, fold)), [run * 0.03 * sn, run * M.legLift * rec - drop, 0]);
+  }
+  // arms: opposite to the same-side leg
+  const armAxis = norm([an.paw.c[0] - an.arm.a[0], an.paw.c[1] - an.arm.a[1], 0]);
+  const G = contact && M.contact ? M.contact : M;
+  for (const [bone, off] of [[B.armN, Math.PI], [B.armF, 0]]) {
+    const sn = Math.sin(ph + off + (G.armPhase || 0));
+    const reach = smooth01(0.5 + 0.5 * sn);
+    const ang = run * (G.armBase + G.armAmp * (reach * 2 - 1)) + (1 - run) * 0.1;
+    const k = 1 + run * G.armStretch * reach;
+    rot[bone] = about(PV[bone], mul(R(0, 0, ang), stretch(armAxis, k)), [run * 0.03 * reach, run * (G.armLift || 0) * reach, 0]);
+  }
+  rot[B.tail] = about(PV[B.tail], R(0, run * 0.45 * Math.sin(2 * ph), run * 0.35 * Math.sin(2 * ph + 1.2)));
+  // cheeks wobble a beat after each landing
+  const jig = 1 + run * M.cheekJiggle * Math.sin(2 * ph - 1.6);
+  rot[B.cheekN] = about(PV[B.cheekN], I4(), [0, 0, 0], [jig, 2 - jig, jig]);
+  rot[B.cheekF] = about(PV[B.cheekF], I4(), [0, 0, 0], [jig, 2 - jig, jig]);
+  rot[B.crown] = about(PV[B.crown], R(M.crownSway * Math.sin(ph * 2 - 2.2), 0, -run * M.crownSway * (0.6 + 0.6 * Math.sin(2 * ph - 2.4))));
+  // eyes: blinks, glances, expression
+  const blink = bump(t, M.blinkEvery, 0.16, 0.9);
+  let eyeScale = 1 - 0.88 * blink;
+  if (M.expression === 'squint') eyeScale *= 1 - 0.35 * expr;
+  const eyeGrow = M.expression === 'surprise' ? 1 + 0.18 * expr : 1;
+  const glance = M.glance * Math.sin(t * 0.8) + M.glance * bump(t, 3.7, 0.9) * 0.8;
+  for (const bone of [B.eyeN, B.eyeF]) rot[bone] = about(PV[bone], R(0, glance, M.glance * 0.4 * Math.sin(t * 0.6)), [0, 0, 0], [eyeGrow, eyeScale * eyeGrow, eyeGrow]);
+  // brows: lift with surprise and a little with every bounce
+  const lift = (M.browLift || 0) * expr + (M.browBounce || 0) * run * Math.sin(2 * ph - 1.0);
+  rot[B.browN] = about(PV[B.browN], R(0, 0, 0), [0, lift, 0]);
+  rot[B.browF] = about(PV[B.browF], R(0, 0, 0), [0, lift, 0]);
+
+  const world = [];
+  for (let i = 0; i < BONES.length; i++) {
+    world[i] = i === 0 ? rot[0] : mul(world[PARENT[i]], rot[i]);
+    out.set(world[i], i * 16);
+  }
+  return out;
+}
+
+/**
+ * Posed positions of the limb tips (paw fingertips, foot soles) in the hamster's own space.
+ * @returns {{name: string, p: number[]}[]}
+ */
+export function limbTips(t, run = 1, character = 'orange', contact = false, bones = poseMatrices(t, run, undefined, character, contact)) {
+  const cfg = typeof character === 'string' ? CHARACTERS[character] : character;
+  return anatomyOf(cfg).tips.map(({ name, bone, p }) => {
+    const o = bone * 16;
+    return {
+      name,
+      p: [0, 1, 2].map((k) => bones[o + k] * p[0] + bones[o + 4 + k] * p[1] + bones[o + 8 + k] * p[2] + bones[o + 12 + k]),
+    };
+  });
+}
+
 /**
  * Skinning matrices for every bone at time t (seconds).
  * run: 0 = standing/idle, 1 = full run (blendable). The cycle loops exactly every run.period.
+ * contact: V3 characters inside the orb press the inner shell with their paws.
  * @returns {Float32Array} BONES.length * 16
  */
-export function poseMatrices(t, run = 1, out = new Float32Array(BONES.length * 16), character = 'orange') {
+export function poseMatrices(t, run = 1, out = new Float32Array(BONES.length * 16), character = 'orange', contact = false) {
   const cfg = typeof character === 'string' ? CHARACTERS[character] : character;
+  if (cfg.run.gait === 'v3') return poseV3(t, run, out, cfg, contact);
   const M = cfg.run, PV = anatomyOf(cfg).pivots;
   const ph = (t / M.period) * Math.PI * 2;
   const breathe = Math.sin(t * 2.2) * 0.012 * (1 - run);
@@ -583,6 +763,7 @@ export function poseMatrices(t, run = 1, out = new Float32Array(BONES.length * 1
   const eyeGrow = M.expression === 'surprise' ? 1 + 0.2 * expr : 1;
   const glance = M.glance * Math.sin(t * 0.8) + M.glance * bump(t, 3.7, 0.9) * 0.8;
   for (const bone of [B.eyeN, B.eyeF]) rot[bone] = about(PV[bone], R(0, glance, M.glance * 0.4 * Math.sin(t * 0.6)), [0, 0, 0], [eyeGrow, eyeScale * eyeGrow, eyeGrow]);
+  rot[B.browN] = rot[B.browF] = I4();
 
   const world = [];
   for (let i = 0; i < BONES.length; i++) {

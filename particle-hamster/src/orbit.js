@@ -30,6 +30,7 @@ export class Orbit {
       el.setPointerCapture?.(e.pointerId);
       // event timestamps (when the input happened), not handler time: slow frames can't fake a pause
       last = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+      this._cadence = 16; // typical gap between this device's pointer events (ms)
       this.dragging = true;
       this.resetting = false;
       this.vYaw = this.vPitch = 0;
@@ -41,7 +42,9 @@ export class Orbit {
       const rect = el.getBoundingClientRect();
       const k = 4.0 / Math.max(260, Math.min(rect.width, rect.height));
       const dx = e.clientX - last.x, dy = e.clientY - last.y;
-      const dt = Math.max(8, now - last.t) / 1000;
+      const gap = Math.max(8, now - last.t);
+      this._cadence = this._cadence * 0.7 + Math.min(gap, 250) * 0.3;
+      const dt = gap / 1000;
       this.yaw += dx * k;
       this.pitch = clamp(this.pitch + dy * k * 0.7, ...this.limits);
       // smoothed release velocity for inertia
@@ -57,7 +60,10 @@ export class Orbit {
       const moved = e && last && Math.hypot(e.clientX - last.x, e.clientY - last.y) > 1;
       if (moved) move(e);
       this.dragging = false;
-      if (!moved && (e?.timeStamp ?? performance.now()) - (last?.t ?? 0) > 120) this.vYaw = this.vPitch = 0;
+      // "held still" = a pause clearly longer than this device's own input cadence (slow frames
+      // deliver pointer events far apart, which must not cancel a fling)
+      const pause = (e?.timeStamp ?? performance.now()) - (last?.t ?? 0);
+      if (!moved && pause > Math.max(120, 2.5 * (this._cadence || 16))) this.vYaw = this.vPitch = 0;
       last = null;
       this.lastInput = performance.now();
     };

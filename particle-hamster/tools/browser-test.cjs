@@ -1,12 +1,14 @@
 // Interaction test of gallery.html in ONE headless Chromium (cloud container, SwiftShader GL):
 // mouse drag + inertia, touch drag, running continues while dragging, idle auto-orbit, reset,
 // tap-to-expand / Escape, ASCII toggle. Usage: node tools/browser-test.cjs <baseUrl> <outDir>
+// GALLERY=gallery-v3.html CHAR=orangeV3 to test the V3 gallery
 const { chromium } = require('playwright');
 const path = require('node:path');
 const fs = require('node:fs');
 
 (async () => {
   const [base, outDir] = process.argv.slice(2);
+  const GALLERY = process.env.GALLERY || 'gallery.html', CHAR = process.env.CHAR || 'orange';
   fs.mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true });
@@ -25,7 +27,7 @@ const fs = require('node:fs');
     const p2 = await ctx.newPage();
     await p2.setViewportSize({ width: 640, height: 480 });
     p2.on('pageerror', (e) => errors.push(e.message));
-    await p2.goto(`${base}/index.html?character=orange&auto=0`, { waitUntil: 'load' });
+    await p2.goto(`${base}/index.html?character=${CHAR}&auto=0`, { waitUntil: 'load' });
     await p2.waitForFunction(() => document.querySelector('canvas')?.dataset.particles, null, { timeout: 180000 });
     await p2.waitForTimeout(800);
     const vfps = await p2.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => (performance.now() - t0 < 1500 ? (n++, requestAnimationFrame(f)) : res(n / 1.5)); requestAnimationFrame(f); }));
@@ -43,7 +45,7 @@ const fs = require('node:fs');
     await p2.close();
   }
 
-  await page.goto(`${base}/gallery.html`, { waitUntil: 'load' });
+  await page.goto(`${base}/${GALLERY}`, { waitUntil: 'load' });
   await page.waitForFunction(() => document.body.dataset.ready === '1', null, { timeout: 180000 });
   check('all six demos built', true, `${await page.evaluate(() => document.body.dataset.particles)} points`);
   const fps = await page.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => (performance.now() - t0 < 2000 ? (n++, requestAnimationFrame(f)) : res(n / 2)); requestAnimationFrame(f); }));
@@ -126,7 +128,7 @@ const fs = require('node:fs');
   check('Escape returns to all six', await page.evaluate(() => !document.body.classList.contains('has-focus')));
 
   // deep link opens directly
-  await page.goto(`${base}/gallery.html#02`, { waitUntil: 'load' });
+  await page.goto(`${base}/${GALLERY}#02`, { waitUntil: 'load' });
   await page.waitForFunction(() => document.body.dataset.ready === '1', null, { timeout: 180000 });
   check('deep link #02 opens focused', await page.evaluate(() => document.querySelector('#d02').classList.contains('focused')));
 

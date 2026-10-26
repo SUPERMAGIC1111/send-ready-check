@@ -2,7 +2,7 @@
 // finite data, valid rig indices, dots stay separate, the run loop is seamless, and the hind
 // feet stay visible below the belly through the run cycle. Data checks, NOT a visual pass.
 import { buildHamster, poseMatrices, BONES, runPeriod } from '../src/hamsterModel.js';
-import { CHARACTER_IDS } from '../src/characters.js';
+import { CHARACTER_IDS, CHARACTERS } from '../src/characters.js';
 
 let failures = 0;
 const ok = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); if (!cond) failures++; };
@@ -13,7 +13,9 @@ for (const id of CHARACTER_IDS) {
   const m = buildHamster(id);
   ok(Date.now() - t0 < 6000, `build time ${Date.now() - t0}ms`);
   const total = m.core.count + m.fur.count;
-  ok(total > 30000 && total < 90000, `dot budget ${total} (surface ${m.core.count}, fur ${m.fur.count})`);
+  // V3 carries ~4x the hair (owner request: "much more hair"), so its budget is higher
+  const cap = CHARACTERS[id].run.gait === 'v3' ? 150000 : 90000;
+  ok(total > 30000 && total < cap, `dot budget ${total} / ${cap} (surface ${m.core.count}, fur ${m.fur.count})`);
   for (const [name, L] of Object.entries({ core: m.core, fur: m.fur })) {
     let bad = 0, badBone = 0;
     for (const k of ['position', 'normal', 'color', 'size', 'weight', 'alpha']) for (const v of L[k]) if (!Number.isFinite(v)) bad++;

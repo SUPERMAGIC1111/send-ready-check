@@ -1,13 +1,14 @@
 """Compose real-browser captures (tools/capture.cjs) into labelled QA sheets.
 Usage: python3 tools/qa-sheets.py <captureDir> <outDir>
 Expects <char>-<view>.png and <char>-run<k>.png files."""
+import os
 import sys
 from pathlib import Path
 from PIL import Image, ImageDraw
 
 src, out = Path(sys.argv[1]), Path(sys.argv[2])
 out.mkdir(parents=True, exist_ok=True)
-CROP = 560
+CROP = 640
 
 def tile(path, size):
     im = Image.open(path).convert("RGB")
@@ -30,7 +31,7 @@ def sheet(rows, cols_labels, size, name):
     img.save(out / name)
     print("wrote", out / name)
 
-chars = ["orange", "purple", "golden"]
-views = ["side", "three-quarter", "front", "back", "profile"]
+chars = os.environ.get("CHARS", "orange purple golden").split()
+views = os.environ.get("VIEWS", "side three-quarter front back profile").split()
 sheet([(c, [src / f"{c}-{v}.png" for v in views]) for c in chars], views, 300, "qa-views.png")
 sheet([(c, [src / f"{c}-run{k}.png" for k in range(6)]) for c in chars], [f"frame {k + 1}/6" for k in range(6)], 250, "qa-run.png")

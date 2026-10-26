@@ -287,7 +287,8 @@ function makeShader(cfg, anat) {
     if (name === 'muzzle') return cream(0.25);
     if (name.startsWith('cheek')) {
       // cream on the lower front of the cheek, sloping down and back into the chest (like the references)
-      const w = smoothstep(R.cheekCream - 0.25, R.cheekCream + 0.12, n[0] * 0.75 - n[1] * 0.65 + 0.15 + jitter);
+      // cheekSide (V3): side-facing cheek fur stays orange, only the front of the cheek is cream
+      const w = smoothstep(R.cheekCream - 0.25, R.cheekCream + 0.12, n[0] * 0.75 - n[1] * 0.65 + 0.15 + jitter - (R.cheekSide || 0) * Math.abs(n[2]));
       const c = blend(w, R.cheekFur);
       // a soft rosy blush on the front of each puffy cheek
       const pr = P[name];
@@ -297,7 +298,7 @@ function makeShader(cfg, anat) {
     }
     if (name === 'head') {
       const blaze = Math.abs(z) < R.blaze[0] + R.blaze[1] * smoothstep(HC[1] + 0.15, HC[1] - 0.25, y) + jitter * 0.4 && n[0] > 0.3 && y < HC[1] + R.blaze[2];
-      if (blaze || (y < HC[1] - R.chin + jitter && x > HC[0])) return cream(0.6);
+      if (blaze || (y < HC[1] - R.chin + jitter && x > HC[0] && Math.abs(z) < (R.chinZ ?? 9) + jitter)) return cream(0.6);
       return orange(n[1] > 0.6 ? 1.1 : 1.0);
     }
     if (name === 'body' || name === 'belly') {
@@ -308,7 +309,7 @@ function makeShader(cfg, anat) {
         smoothstep(-0.06, 0.1, line) * smoothstep(zMax + 0.12, zMax - 0.08, Math.abs(z) - jitter) * smoothstep(-0.5, -0.25, x)
       );
       const rump = smoothstep(-0.4, -0.85, x);
-      return blend(w, w > 0.5 ? 1.1 : 1.0 + 0.25 * rump);
+      return blend(w, w > 0.5 ? R.bellyFur ?? 1.1 : 1.0 + 0.25 * rump);
     }
     if (name.startsWith('arm')) return orange(0.55);
     if (name.startsWith('leg')) return orange(0.6);
@@ -431,7 +432,8 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     const f = 3.5;
     const comb = [noise3(p[0] * f, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f + 11, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f, p[1] * f + 23, p[2] * f) - 0.5];
     const flow = pt.name.startsWith('cheek') ? [-0.6, -0.5, 0] : pt.kind === KIND.WHITE_FUR ? [-0.3, -1, 0] : [-1, -0.25, 0];
-    return norm([0, 1, 2].map((k) => n[k] + flow[k] * cfg.fur.lay + comb[k] * 0.9 + (rnd() - 0.5) * 0.4));
+    const cj = cfg.fur.comb ?? [0.9, 0.4]; // [coherent lean, random jitter]: low jitter = locks, not haze
+    return norm([0, 1, 2].map((k) => n[k] + flow[k] * cfg.fur.lay + comb[k] * cj[0] + (rnd() - 0.5) * cj[1]));
   };
   const furTip = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, cfg.palette.furTip, 0.35 + rnd() * 0.35) : mix3(pt.col, cfg.palette.ivory, 0.3));
   for (let s = 0; s < cfg.fur.fluff && furry.length; s++) {
@@ -439,6 +441,23 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     const len = cfg.fur.len * root.fur * nearFeature(root.p) * (0.45 + rnd() * 0.75);
     if (len < 0.02) continue;
     const dir = combDir(root);
+    const nd = cfg.fur.strandDots || 1;
+    if (nd > 1) {
+      // hair strands (V3): a few dots along a soft, drooping, slightly curling lock, so the coat
+      // reads as long fluffy hair rather than a fuzzy halo
+      const seedS = rnd(), tip = furTip(root);
+      const curl = (rnd() - 0.5) * 0.5;
+      for (let k = 1; k <= nd; k++) {
+        const u = (k - rnd() * 0.5) / nd;
+        fur.push({
+          p: [0, 1, 2].map((q) => root.p[q] + dir[q] * len * u - (q === 1 ? cfg.fur.droop * len * u * u : 0) + (q === 2 ? curl * len * u * u : 0)),
+          n: root.n, col: mix3(root.col, tip, u), kind: root.kind,
+          boneA: root.boneA, boneB: root.boneB, w: root.w,
+          t: u, fleck: k === nd && rnd() < 0.03 ? 1 : 0, seed: seedS, size: D.fluffSize * (1.1 - 0.4 * u), alpha: 1 - 0.3 * u,
+        });
+      }
+      continue;
+    }
     const u = Math.pow(rnd(), 0.8);
     fur.push({
       p: [0, 1, 2].map((k) => root.p[k] + dir[k] * len * u - (k === 1 ? 0.3 * len * u * u : 0)),

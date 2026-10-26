@@ -97,6 +97,18 @@ const VERTEX = /* glsl */ `
       // aFlag: sparkle dot (surface) or drifting fleck (fur)
       col = (base * lit * tw + rim * ${LOOK.rim.toFixed(3)} * (0.5 * base + 0.5)) * fade + aFlag * 0.22;
     }
+    if (uSolid > 0.5) {
+      // ASCII source: carve the form with light. Strong key light and dark silhouette edges give
+      // the glyph ramp real light/dark structure; dark features become blank cells (holes),
+      // pink skin (nose, paws, inner ears) stays bright so it reads as dense glyphs
+      float key = pow(clamp((ndl + 0.15) / 1.15, 0.0, 1.0), 1.2);
+      float edge = 1.0 - 0.75 * pow(1.0 - clamp(nv.z, 0.0, 1.0), 2.0);
+      if (aKind > 2.5 && aKind < 3.5) col = aFlag > 0.5 ? vec3(1.0) : (dot(aColor, vec3(0.33)) > 0.7 ? aColor * 0.95 : vec3(0.0));
+      else if (aKind > 4.5) col = aColor.r > 0.9 ? aColor * 0.7 : vec3(0.0);
+      else if (aKind > 3.5) col = dot(aColor, vec3(0.33)) > 0.8 ? aColor : vec3(0.0);
+      else if (aKind > 1.5) col = aColor * (0.75 + 0.35 * key);
+      else col = aColor * (0.2 + 0.9 * key) * edge;
+    }
     vColor = col;
     vKind = aKind;
     vAlpha = aAlpha * mix(0.2, 1.0, k);
@@ -123,11 +135,9 @@ const FRAGMENT = /* glsl */ `
     if (r > 1.0) discard;
     if (uSolid > 0.5) {
       // keep lit colours below the 8-bit clamp so colour survives the glyph pass
-      float gain = ${ASCII.solidGain.toFixed(3)} * (abs(vKind - 1.0) < 0.5 ? ${ASCII.whiteFurGain.toFixed(3)} : 1.0);
-      // eyes become clean dark holes (blank cells) with only the catch-light left bright,
-      // so the face survives the glyph pass
-      if (abs(vKind - 3.0) < 0.5) gain = dot(vColor, vec3(0.33)) > 0.9 ? 1.0 : 0.0;
-      gl_FragColor = vec4(vColor * gain, 1.0);
+      // colours were already remapped for the glyph pass in the vertex shader
+      float gain = abs(vKind - 1.0) < 0.5 ? ${ASCII.whiteFurGain.toFixed(3)} : 1.0;
+      gl_FragColor = vec4(min(vColor * gain, vec3(1.0)), 1.0);
       return;
     }
   #ifdef GLOW

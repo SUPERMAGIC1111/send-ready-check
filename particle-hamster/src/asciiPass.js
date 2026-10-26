@@ -23,12 +23,14 @@ export const ASCII_FRAGMENT = /* glsl */ `
     c += texture2D(tScene, (cell + vec2(0.75, 0.75)) / uCells).rgb;
     c *= 0.25;
     // glyph density follows the lit, depth-faded luminance; colour keeps the hue
-    float v = dot(c, vec3(0.3, 0.59, 0.11));
-    float idx = floor(clamp(v * ${ASCII.lumScale.toFixed(3)}, 0.0, 0.999) * uGlyphCount);
+    float v = max(dot(c, vec3(0.3, 0.59, 0.11)), max(c.r, max(c.g, c.b)) * 0.75);
+    // contrast curve: shadows fall to blank/'.', lit fur fills the middle, highlights reach '#%@'
+    float lv = smoothstep(0.06, 0.95, v * ${ASCII.lumScale.toFixed(3)});
+    float idx = floor(clamp(lv, 0.0, 0.999) * uGlyphCount);
     if (idx < 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
     float g = texture2D(tGlyphs, vec2((idx + local.x) / uGlyphCount, local.y)).r;
     vec3 hue = c / max(max(c.r, max(c.g, c.b)), 1e-3);
-    gl_FragColor = vec4(hue * (0.45 + 0.75 * min(v, 1.0)) * g, 1.0);
+    gl_FragColor = vec4(hue * (0.35 + 0.8 * lv) * g, 1.0);
   }
 `;
 

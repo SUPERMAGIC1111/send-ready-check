@@ -21,7 +21,8 @@ const path = require('node:path');
     // step the paused clock so frames are evenly spaced in animation time (software GL is slow)
     const period = Number(process.env.PERIOD || 0.42);
     for (let i = 0; i < frames; i++) {
-      await page.evaluate((t) => { window.__stage.time = t; }, 10 + (i / frames) * period * 2);
+      // step the run clock; in wheel mode turn the wheel by exactly omega * dt to match
+      await page.evaluate((t) => { const s = window.__stage; if (s.wheelMode) s.wheelAngle = -s.wheelOmega * (t - 10); s.time = t; }, 10 + (i / frames) * period * Number(process.env.STRIDES || 2));
       await page.waitForTimeout(250);
       await shot(i);
     }

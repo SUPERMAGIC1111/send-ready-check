@@ -1,4 +1,5 @@
 import { CHARACTERS_V3 } from './charactersV3.js';
+import { CHARACTERS_V4 } from './charactersV4.js';
 
 // The three hamster characters. Each config drives hamsterModel.js: anatomy (implicit
 // primitives, rest pose), palette, colour regions, fur, dot density and run personality.
@@ -191,6 +192,6 @@ export const CHARACTERS = {
 };
 
 // V3 designs live in their own file; registered here so every tool and page can load them by id
-Object.assign(CHARACTERS, CHARACTERS_V3);
+Object.assign(CHARACTERS, CHARACTERS_V3, CHARACTERS_V4);
 
 export const CHARACTER_IDS = Object.keys(CHARACTERS);

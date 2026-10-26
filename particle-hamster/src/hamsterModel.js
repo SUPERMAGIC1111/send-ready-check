@@ -325,7 +325,7 @@ function makeShader(cfg, anat) {
     }
     if (name === 'head') {
       const blaze = Math.abs(z) < R.blaze[0] + R.blaze[1] * smoothstep(HC[1] + 0.15, HC[1] - 0.25, y) + jitter * 0.4 && n[0] > 0.3 && y < HC[1] + R.blaze[2];
-      if (blaze || (y < HC[1] - R.chin + jitter && x > HC[0] && Math.abs(z) < (R.chinZ ?? 9) + jitter)) return cream(0.6);
+      if (blaze || (y < HC[1] - R.chin + jitter && x > HC[0] && Math.abs(z) < (R.chinZ ?? 9) + jitter)) return cream(R.chinFur ?? 0.6);
       return orange(n[1] > 0.6 ? 1.1 : 1.0);
     }
     if (name === 'body' || name === 'belly') {
@@ -458,7 +458,9 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     const { p, n } = pt;
     const f = 3.5;
     const comb = [noise3(p[0] * f, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f + 11, p[1] * f, p[2] * f) - 0.5, noise3(p[0] * f, p[1] * f + 23, p[2] * f) - 0.5];
-    const flow = pt.name.startsWith('cheek') ? [-0.6, -0.5, 0] : pt.kind === KIND.WHITE_FUR ? [-0.3, -1, 0] : [-1, -0.25, 0];
+    // flows (V4 can override): cheek fluff sweeps back, pale fur hangs, body fur lies back
+    const FL = cfg.fur.flows || {};
+    const flow = pt.name.startsWith('cheek') ? FL.cheek || [-0.6, -0.5, 0] : pt.kind === KIND.WHITE_FUR ? FL.white || [-0.3, -1, 0] : FL.body || [-1, -0.25, 0];
     const cj = cfg.fur.comb ?? [0.9, 0.4]; // [coherent lean, random jitter]: low jitter = locks, not haze
     return norm([0, 1, 2].map((k) => n[k] + flow[k] * cfg.fur.lay + comb[k] * cj[0] + (rnd() - 0.5) * cj[1]));
   };

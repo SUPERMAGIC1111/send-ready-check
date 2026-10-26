@@ -9,6 +9,11 @@ import { VIEWS } from './shading.js';
 const canvas = document.getElementById('stage');
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
+// #wheel-orangeV3 style links (hosts that drop the query string still pass a plain #anchor)
+{
+  const m = /^#(wheel|orb|solo)-(\w+)$/.exec(location.hash);
+  if (m) { params.set('character', m[2]); if (m[1] !== 'solo') params.set(m[1], '1'); }
+}
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const character = CHARACTERS[params.get('character')] ? params.get('character') : 'orange';
 

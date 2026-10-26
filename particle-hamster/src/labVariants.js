@@ -19,6 +19,7 @@ const bold = {
 export const LAB_VARIANTS = [
   { id: 'v4', label: 'V4 Orange', note: 'baseline', character: 'orangeV4', render: 'dots', build: {} },
   { id: 'voxel', label: 'Micro-Voxel', character: 'orangeLab', render: 'voxel', build: { override: fine, voxel: 0.042 } },
+  { id: 'voxelV2', label: 'Voxel V2 (short legs)', note: 'experimental', character: 'voxelV2', render: 'voxel', build: { override: fine, voxel: 0.042 } },
   { id: 'fine', label: 'Microdots Fine', character: 'orangeLab', render: 'sculpt', build: { override: fine } },
   { id: 'bold', label: 'Microdots Bold', character: 'orangeLab', render: 'sculpt', build: { override: bold } },
   { id: 'rocket', label: 'Purple Rocket', character: 'purpleRocket', render: 'sculpt', build: { override: fine } },

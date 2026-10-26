@@ -196,4 +196,35 @@ Object.assign(brain.anatomy, {
 brain.run = sprint({ bounce: 0, squash: 0 });
 brain.brain = true;
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, brain };
+// --- Voxel V2, "short-leg potato" (texture lab): the Micro-Voxel body, lowered so the belly sits
+// close to the running surface. Visible legs are about half as long as the lab body's, the arms
+// are folded under the round body, the head and face move down with the body, and the run is a
+// compact four-legged scurry (short period, small leg swing, no backward push).
+const DROP = -0.15;
+const dropC = (c) => [c[0], c[1] + DROP, c[2]];
+const potato = clone(lab);
+Object.assign(potato, { id: 'voxelV2', name: 'Voxel V2' });
+Object.assign(potato.anatomy, {
+  body: { c: dropC(lab.anatomy.body.c), r: [0.84, 0.72, 0.9] },
+  belly: { c: dropC(lab.anatomy.belly.c), r: [0.78, 0.5, 0.9] },
+  head: { ...lab.anatomy.head, c: dropC(lab.anatomy.head.c) },
+  cheek: { ...lab.anatomy.cheek, c: dropC(lab.anatomy.cheek.c) },
+  muzzle: { ...lab.anatomy.muzzle, c: dropC(lab.anatomy.muzzle.c) },
+  nose: { ...lab.anatomy.nose, c: dropC(lab.anatomy.nose.c) },
+  mouth: { ...lab.anatomy.mouth, c: dropC(lab.anatomy.mouth.c) },
+  tooth: { ...lab.anatomy.tooth, c: dropC(lab.anatomy.tooth.c) },
+  ear: { ...lab.anatomy.ear, c: dropC(lab.anatomy.ear.c) },
+  tail: { ...lab.anatomy.tail, c: dropC(lab.anatomy.tail.c) },
+  // short legs: hips high in the body, feet on the floor (floor = -1.55 as before)
+  leg: { a: [-0.42, -1.0, 0.52], b: [-0.38, -1.34, 0.54], r1: 0.25, r2: 0.14 },
+  foot: { c: [-0.2, -1.46, 0.54], r: [0.29, 0.09, 0.16] },
+  // front paws: tiny, tucked under the chest, not hands
+  arm: { a: [0.5, -0.92, 0.44], b: [0.62, -1.25, 0.38], r1: 0.13, r2: 0.1 },
+  paw: { c: [0.66, -1.455, 0.36], r: [0.16, 0.11, 0.13] },
+});
+potato.palette = lab.palette;
+// gait tuned numerically: every paw and foot reaches the same floor and stays planted ~35% of the
+// cycle; feet lift ~0.14, front paws ~0.09 (small, rapid steps)
+potato.run = sprint({ period: 0.24, quad: Math.PI / 2, lean: -0.02, legBase: -0.05, legAmp: 0.3, legFold: 0, legStretch: 0, legLift: 0, bounce: 0.05, armBase: 0.2, armAmp: 0.5, armStretch: 0.1 });
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, brain };

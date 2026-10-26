@@ -12,17 +12,17 @@ import { LIGHT } from './shading.js';
 export const ORB_STYLES = {
   // 04 - rich gold / amber / tangerine / ivory / warm white
   gold: {
-    palette: [[0.86, 0.46, 0.12], [1.0, 0.62, 0.2], [1.0, 0.78, 0.36], [1.0, 0.9, 0.66], [1.0, 0.97, 0.9]],
+    palette: [[0.8, 0.36, 0.08], [0.98, 0.52, 0.14], [1.0, 0.66, 0.24], [1.0, 0.78, 0.42], [1.0, 0.9, 0.7]],
     count: 26000, radius: 2.05, size: 0.021, spin: 0.09, turbulence: 0.04, strays: 0.05, band: 1.0, burst: 0, frontFade: 0.92, gain: 1.0,
   },
   // 05 - pearl / silver / lavender / lilac / subtle violet, cool white highlights: the elegant one
   pearl: {
-    palette: [[0.52, 0.42, 0.78], [0.72, 0.62, 0.92], [0.84, 0.8, 0.96], [0.9, 0.9, 0.96], [0.97, 0.97, 1.0]],
+    palette: [[0.42, 0.3, 0.72], [0.58, 0.46, 0.86], [0.72, 0.64, 0.92], [0.82, 0.8, 0.94], [0.94, 0.94, 1.0]],
     count: 30000, radius: 2.05, size: 0.017, spin: 0.055, turbulence: 0.026, strays: 0.035, band: 0.85, burst: 0, frontFade: 0.94, gain: 0.95,
   },
   // 06 - honey / gold / cream / champagne / warm amber, livelier with little scatter bursts
   honey: {
-    palette: [[0.92, 0.56, 0.16], [1.0, 0.72, 0.28], [1.0, 0.84, 0.48], [0.98, 0.9, 0.72], [1.0, 0.96, 0.86]],
+    palette: [[0.86, 0.5, 0.12], [1.0, 0.64, 0.2], [1.0, 0.76, 0.34], [0.98, 0.84, 0.56], [1.0, 0.92, 0.76]],
     count: 24000, radius: 2.1, size: 0.022, spin: 0.12, turbulence: 0.05, strays: 0.07, band: 1.1, burst: 1, frontFade: 0.9, gain: 1.05,
   },
 };
@@ -126,16 +126,17 @@ const VERTEX = /* glsl */ `
     // the lit limb glows as a crescent (upper left), the far limb falls off into warm dark
     vec2 lx = normalize(uLight.xy);
     float crescent = max(dot(normalize(nv.xy + 1e-4), lx), 0.0);
-    float lum = 0.14 + 0.4 * lambert + limb * (0.12 + 1.25 * crescent * crescent) + 1.6 * band;
+    float lum = 0.12 + 0.32 * lambert + limb * (0.04 + 0.95 * crescent * crescent) + 1.25 * band;
     float sparkle = step(0.985, fract(aSeed * 91.3)) * (0.6 + 0.4 * sin(uTime * 2.0 + aSeed * 50.0));
-    vColor = palette(aTone + band * 0.35 + limb * 0.25) * (lum + sparkle) * uGain;
+    vColor = palette(aTone * 0.8 + band * 0.25) * (lum + sparkle) * uGain;
 
     // keep the character visible: only points facing the viewer AND over the middle of the orb
     // (where the hamster is) fade; the limb and the far side stay, so the orb keeps its volume
     vec4 cv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
     float centre = 1.0 - smoothstep(0.5, 0.86, length(mv.xy - cv.xy) / uRadius);
     float front = smoothstep(0.0, 0.6, nv.z) * centre * uFrontFade;
-    vAlpha = (1.0 - front) * (0.3 + 0.7 * lane) * (0.5 + 0.5 * fract(aSeed * 13.7)) * (1.0 - 0.4 * aStray) * (1.0 - 0.25 * back);
+    // limb points pile up in screen space; thin them so additive light stays gold instead of white
+    vAlpha = (1.0 - front) * (0.3 + 0.7 * lane) * (0.5 + 0.5 * fract(aSeed * 13.7)) * (1.0 - 0.4 * aStray) * (1.0 - 0.25 * back) * (1.0 - 0.55 * limb);
 
     gl_PointSize = max(uMinSize, aSize * (1.0 + 0.6 * band) * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;

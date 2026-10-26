@@ -82,7 +82,7 @@ const VERTEX = /* glsl */ `
     float wave = 0.5 + 0.5 * sin(dot(position, vec3(2.1, 1.3, 1.7)) - uTime * 0.9);
     vec3 base = aColor * (1.0 + ${LOOK.drift.toFixed(3)} * (wave - 0.5));
     // nearer dots a touch brighter, farther a touch dimmer: depth reads in a still frame
-    float fade = clamp(1.0 - (-mv.z - uFocus) * ${LOOK.depthFade.toFixed(3)}, 0.75, 1.12);
+    float fade = clamp(1.0 - (-mv.z - uFocus) * ${LOOK.depthFade.toFixed(3)}, 0.75, 1.04);
     vec3 col;
     if (aKind > 2.5 && aKind < 3.5) {
       // glossy bead eyes: catch-lights are the brightest dots on the character
@@ -103,6 +103,9 @@ const VERTEX = /* glsl */ `
 
     // ASCII source pass: features (kind >= 2) grow less so eyes and the smile stay readable
     float grow = uSolid > 0.5 ? (aKind > 1.5 ? ${ASCII.featureDotScale.toFixed(3)} : uDotScale) : uDotScale;
+  #ifdef GLOW
+    grow *= ${LOOK.glowSize.toFixed(3)};
+  #endif
     gl_PointSize = max(uMinSize, aSize * grow * uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
@@ -110,6 +113,7 @@ const VERTEX = /* glsl */ `
 
 const FRAGMENT = /* glsl */ `
   uniform float uSolid;
+  uniform float uGlow;
   varying vec3 vColor;
   varying float vAlpha;
   varying float vKind;
@@ -123,6 +127,11 @@ const FRAGMENT = /* glsl */ `
       gl_FragColor = vec4(vColor * gain, 1.0);
       return;
     }
+  #ifdef GLOW
+    // faint luminous underlay: the body glows softly between the crisp dots, Motion-style
+    gl_FragColor = vec4(vColor, exp(-r * r * 3.5) * uGlow);
+    return;
+  #endif
     // round dot with a soft edge (alpha-to-coverage on the surface layer, blending on the fur)
     float a = smoothstep(1.0, 0.62, r) * vAlpha;
     if (a < 0.02) discard;
@@ -213,6 +222,7 @@ export class ParticleHamster extends THREE.Group {
       uDotScale: { value: 1 },
       uSolid: { value: 0 },
       uFocus: { value: CAMERA.distance },
+      uGlow: { value: LOOK.glow },
       uLight: { value: new THREE.Vector3(...LIGHT) },
     };
     this.uniforms = shared;
@@ -239,13 +249,25 @@ export class ParticleHamster extends THREE.Group {
       });
     this._coreMat = dotMaterial(false);
     this._furMat = dotMaterial(true);
-    this.core = new THREE.Points(layerGeometry(layers.core), this._coreMat);
+    this._glowMat = new THREE.ShaderMaterial({
+      uniforms: shared,
+      vertexShader: VERTEX,
+      fragmentShader: FRAGMENT,
+      defines: { GLOW: '' },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const coreGeometry = layerGeometry(layers.core);
+    this.core = new THREE.Points(coreGeometry, this._coreMat);
+    this.glow = new THREE.Points(coreGeometry, this._glowMat);
     this.fur = new THREE.Points(layerGeometry(layers.fur), this._furMat);
+    this.glow.renderOrder = 0.5;
     this.core.renderOrder = 1;
     this.fur.renderOrder = 2;
-    this.core.frustumCulled = this.fur.frustumCulled = false;
+    this.core.frustumCulled = this.fur.frustumCulled = this.glow.frustumCulled = false;
 
-    this.add(this.occluder, this.core, this.fur);
+    this.add(this.occluder, this.glow, this.core, this.fur);
     this.particleCount = layers.core.count + layers.fur.count;
     this.update(0, { run: 1 });
   }
@@ -270,6 +292,7 @@ export class ParticleHamster extends THREE.Group {
     this._furMat.depthWrite = on;
     this._coreMat.alphaToCoverage = !on;
     this._coreMat.needsUpdate = true;
+    this.glow.visible = !on;
   }
 
   /** @param {number} t seconds; run 0..1 blends idle -> run; assemble 0..1 for the intro */
@@ -287,6 +310,7 @@ export class ParticleHamster extends THREE.Group {
     this._occluderMat.dispose();
     this._coreMat.dispose();
     this._furMat.dispose();
+    this._glowMat.dispose();
     this.removeFromParent();
   }
 }

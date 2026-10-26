@@ -207,6 +207,12 @@ function makeShader(cfg, anat) {
     const creamTone = () => mix3(C.ivory, C.cream, noise3(x * 5, y * 5, z * 5 + 7));
     const orange = (fur = 1) => ({ col: furTone(), kind: KIND.FUR, fur });
     const cream = (fur = 1) => ({ col: creamTone(), kind: KIND.WHITE_FUR, fur });
+    // soft boundary: dots in the transition band mix both colours, so patches never have a hard edge
+    const blend = (w, fur = 1) => {
+      if (w <= 0.001) return orange(fur);
+      if (w >= 0.999) return cream(fur);
+      return { col: mix3(furTone(), creamTone(), w), kind: w > 0.5 ? KIND.WHITE_FUR : KIND.FUR, fur };
+    };
 
     if (name === 'mouth') {
       // inside of the open smile: pink tongue in the lower part, warm rose above (never black)
@@ -247,12 +253,13 @@ function makeShader(cfg, anat) {
     }
     if (name === 'muzzle') return cream(0.25);
     if (name.startsWith('cheek')) {
-      if (n[0] <= R.cheekCream + jitter) return orange(R.cheekFur);
+      // cream on the lower front of the cheek, sloping down and back into the chest (like the references)
+      const w = smoothstep(R.cheekCream - 0.25, R.cheekCream + 0.12, n[0] * 0.75 - n[1] * 0.65 + 0.15 + jitter);
+      const c = blend(w, R.cheekFur);
       // a soft rosy blush on the front of each puffy cheek
       const pr = P[name];
       const bc = [pr.c[0] + pr.r[0] * 0.7, pr.c[1] + pr.r[1] * 0.15, pr.c[2] * 1.05];
-      const blush = smoothstep(0.24, 0.06, dist(p, bc)) * (R.blush || 0);
-      const c = cream(R.cheekFur);
+      const blush = smoothstep(0.24, 0.06, dist(p, bc)) * (R.blush || 0) * w;
       return { ...c, col: mix3(c.col, C.blush || C.pink, blush) };
     }
     if (name === 'head') {
@@ -262,10 +269,13 @@ function makeShader(cfg, anat) {
     }
     if (name === 'body' || name === 'belly') {
       const [b0, b1, b2, zMax] = R.belly;
-      const belly = n[1] < -0.62 || (y < b0 + b1 * (x - b2) + jitter && Math.abs(z) < zMax + jitter && x > -0.35);
-      if (belly) return cream(1.1);
+      const line = b0 + b1 * (x - b2) + jitter - y; // > 0 below the belly line
+      const w = Math.max(
+        smoothstep(-0.45, -0.75, n[1]),
+        smoothstep(-0.06, 0.1, line) * smoothstep(zMax + 0.12, zMax - 0.08, Math.abs(z) - jitter) * smoothstep(-0.5, -0.25, x)
+      );
       const rump = smoothstep(-0.4, -0.85, x);
-      return orange(1.0 + 0.25 * rump);
+      return blend(w, w > 0.5 ? 1.1 : 1.0 + 0.25 * rump);
     }
     if (name.startsWith('arm')) return orange(0.55);
     if (name.startsWith('leg')) return orange(0.6);
@@ -312,6 +322,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     if (pt.kind === KIND.EYE || pt.kind === KIND.FEATURE || pt.kind === KIND.MOUTH || pt.name === 'nose') return D.feature;
     if (pt.kind === KIND.SKIN) return D.skin;
     if (isFace(pt.p, pt.boneB) || anat.eyes.some((e) => dist(pt.p, e.c) < eyeRimR)) return D.face;
+    if (pt.kind === KIND.WHITE_FUR) return D.cream;
     return D.body;
   };
 
@@ -374,7 +385,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
     const flow = pt.name.startsWith('cheek') ? [-0.6, -0.5, 0] : pt.kind === KIND.WHITE_FUR ? [-0.3, -1, 0] : [-1, -0.25, 0];
     return norm([0, 1, 2].map((k) => n[k] + flow[k] * cfg.fur.lay + comb[k] * 0.9 + (rnd() - 0.5) * 0.4));
   };
-  const furTip = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, cfg.palette.furTip, 0.35 + rnd() * 0.35) : mix3(pt.col, [1, 1, 1], 0.3));
+  const furTip = (pt) => (pt.kind === KIND.FUR ? mix3(pt.col, cfg.palette.furTip, 0.35 + rnd() * 0.35) : mix3(pt.col, cfg.palette.ivory, 0.3));
   for (let s = 0; s < cfg.fur.fluff && furry.length; s++) {
     const root = furry[Math.floor(rnd() * furry.length)];
     const len = cfg.fur.len * root.fur * nearFeature(root.p) * (0.45 + rnd() * 0.75);
@@ -416,7 +427,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
 
   for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.025) pt.sparkle = 1;
   // cream dots a touch larger: less black between bright dots, so pale fur reads soft, not grainy
-  const sizeOf = (pt) => (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.WHITE_FUR ? 1.14 : 1) * pt.r * D.dotScale;
+  const sizeOf = (pt) => (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.WHITE_FUR ? 1.08 : 1) * pt.r * D.dotScale;
   const out = {
     id: cfg.id,
     core: pack(core, sizeOf, () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),

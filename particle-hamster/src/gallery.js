@@ -9,8 +9,9 @@ import { CHARACTERS } from './characters.js';
 const params = new URLSearchParams(location.search);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const canvas = document.getElementById('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setClearColor(0x000000, 0);
+// opaque canvas: dot fragments write alpha < 1, which an alpha canvas would composite washed-out
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: true, powerPreference: 'high-performance' });
+const PAGE_BG = 0x050505; // matches --bg; the canvas paints the page background between cards
 renderer.autoClear = true;
 
 const demos = [...document.querySelectorAll('.demo')].map((el) => {
@@ -105,9 +106,9 @@ function frame(now) {
   prev = now;
   const dpr = renderer.getPixelRatio();
   const H = innerHeight;
-  // transparent between cards (page background), opaque black inside each card's viewport
+  // page background between cards, black inside each card's viewport
   renderer.setScissorTest(false);
-  renderer.setClearColor(0x000000, 0);
+  renderer.setClearColor(PAGE_BG, 1);
   renderer.clear();
   renderer.setScissorTest(true);
   renderer.setClearColor(0x000000, 1);

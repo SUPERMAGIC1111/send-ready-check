@@ -28,6 +28,8 @@ const jobs = [
   ['fur.vert', VPRE + '#define FUR\n' + SHADERS.VERTEX],
   ['core.frag', FPRE + SHADERS.FRAGMENT],
   ['fur.frag', FPRE + '#define FUR\n' + SHADERS.FRAGMENT],
+  ['glow.vert', VPRE + '#define GLOW\n' + SHADERS.VERTEX],
+  ['glow.frag', FPRE + '#define GLOW\n' + SHADERS.FRAGMENT],
   ['occluder.vert', VPRE + SHADERS.OCCLUDER_VERTEX],
   ['orb.vert', VPRE + ORB_SHADERS.VERTEX],
   ['orb.frag', FPRE + ORB_SHADERS.FRAGMENT],

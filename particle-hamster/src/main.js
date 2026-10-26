@@ -12,7 +12,8 @@ const params = new URLSearchParams(location.search);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const character = CHARACTERS[params.get('character')] ? params.get('character') : 'orange';
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// opaque canvas: dot fragments write alpha < 1, which an alpha canvas would composite washed-out
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: true, powerPreference: 'high-performance' });
 renderer.setClearColor(0x000000, 1);
 const stage = new HamsterStage(renderer, { character, orb: params.get('orb') === '1', reducedMotion, time: Number(params.get('t') || 0) });
 if (params.has('view')) {

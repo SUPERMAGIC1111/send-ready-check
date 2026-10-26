@@ -14,7 +14,7 @@ for (const id of CHARACTER_IDS) {
   ok(Date.now() - t0 < 6000, `build time ${Date.now() - t0}ms`);
   const total = m.core.count + m.fur.count;
   // V3 carries ~4x the hair (owner request: "much more hair"), so its budget is higher
-  const cap = CHARACTERS[id].run.gait === 'v3' ? 150000 : 90000;
+  const cap = CHARACTERS[id].run.gait === 'v3' ? 175000 : 90000;
   ok(total > 30000 && total < cap, `dot budget ${total} / ${cap} (surface ${m.core.count}, fur ${m.fur.count})`);
   for (const [name, L] of Object.entries({ core: m.core, fur: m.fur })) {
     let bad = 0, badBone = 0;

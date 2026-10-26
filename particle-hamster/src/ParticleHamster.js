@@ -29,6 +29,7 @@ const VERTEX = /* glsl */ `
   uniform float uDotScale;
   uniform float uFocus;
   uniform float uSolid;
+  uniform float uWhiteFloor;
   uniform vec3 uLight;
 
   attribute vec3 aColor;
@@ -91,6 +92,8 @@ const VERTEX = /* glsl */ `
       col = base * (0.85 + 0.3 * diff); // inside of the smile
     } else {
       float lit = ${LOOK.ambient.toFixed(3)} + ${LOOK.diffuse.toFixed(3)} * diff;
+      // healthy white fur: cream never dims to grey in shadow (V3 sets uWhiteFloor)
+      if (aKind > 0.5 && aKind < 1.5) lit = max(lit, uWhiteFloor);
     #ifdef FUR
       lit += 0.08 * aT;
     #endif
@@ -236,7 +239,8 @@ export class ParticleHamster extends THREE.Group {
       uDotScale: { value: 1 },
       uSolid: { value: 0 },
       uFocus: { value: CAMERA.distance },
-      uGlow: { value: LOOK.glow },
+      uGlow: { value: this.character.look?.glow ?? LOOK.glow },
+      uWhiteFloor: { value: this.character.look?.whiteFloor ?? 0 },
       uLight: { value: new THREE.Vector3(...LIGHT) },
     };
     this.uniforms = shared;

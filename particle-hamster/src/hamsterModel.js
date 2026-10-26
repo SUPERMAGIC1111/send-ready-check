@@ -82,6 +82,13 @@ function earBasis(side, facing) {
   return [u, cross(w, u), w];
 }
 const deg = Math.PI / 180;
+// eyeball; eye.flat < 1 squashes it along the gaze so the eye sits into the head as a flatter disc
+function eyePrim(N, e, A) {
+  const f = A.flat || 1;
+  if (f === 1) return ell('eye' + N, 'eye' + N, e.c, [A.r, A.r, A.r], 0.02);
+  const v = norm(cross(e.gaze, [0, 0, 1]));
+  return ell('eye' + N, 'eye' + N, e.c, [A.r * f, A.r, A.r], 0.02, [e.gaze, v, cross(e.gaze, v)]);
+}
 
 /** Build the implicit anatomy for one character config. */
 function makeAnatomy(cfg) {
@@ -90,7 +97,7 @@ function makeAnatomy(cfg) {
   const eyes = [1, -1].map((s) => {
     const az = A.eye.azim * deg, el = A.eye.elev * deg;
     const dir = norm([Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az) * s]);
-    return { c: add(HC, dir, A.eye.dist), gaze: dir, look: norm(mirror(A.eye.look, s)), side: s, r: A.eye.r };
+    return { c: add(HC, dir, A.eye.dist), gaze: dir, look: norm(mirror(A.eye.look, s)), side: s, r: A.eye.r, flat: A.eye.flat || 1 };
   });
   const prims = [
     ell('body', 'body', A.body.c, A.body.r, 0),
@@ -104,7 +111,7 @@ function makeAnatomy(cfg) {
     const N = s > 0 ? 'N' : 'F';
     prims.push(
       ell('cheek' + N, 'cheek' + N, mirror(A.cheek.c, s), A.cheek.r, A.cheek.k),
-      ell('eye' + N, 'eye' + N, eyes[s > 0 ? 0 : 1].c, [A.eye.r, A.eye.r, A.eye.r], 0.02),
+      eyePrim(N, eyes[s > 0 ? 0 : 1], A.eye),
       ell('ear' + N, 'ear' + N, mirror(A.ear.c, s), A.ear.r, 0.05, earBasis(s, A.ear.facing)),
       cap('arm' + N, 'arm' + N, mirror(A.arm.a, s), mirror(A.arm.b, s), A.arm.r1, A.arm.r2, 0.1),
       ell('paw' + N, 'arm' + N, mirror(A.paw.c, s), A.paw.r, 0.035),
@@ -112,6 +119,24 @@ function makeAnatomy(cfg) {
       ell('foot' + N, 'leg' + N, mirror(A.foot.c, s), A.foot.r, 0.04),
       ell('tooth' + N, 'head', mirror(A.tooth.c, s), A.tooth.r, 0.004)
     );
+  }
+  // flat eyes (V3) sit exactly on the head: find the surface along each gaze (eyes and teeth
+  // excluded) and set the eyeball so its front just protrudes from it
+  if (A.eye.flat) {
+    const others = prims.filter((p) => !p.name.startsWith('eye') && !p.name.startsWith('tooth'));
+    for (const e of eyes) {
+      const field = (t) => {
+        const q = add(HC, e.gaze, t);
+        let u = 1e9;
+        others.forEach((p, j) => { const d = primDist(p, q[0], q[1], q[2]); u = j === 0 ? d : smin(u, d, p.k); });
+        return u;
+      };
+      let lo = 0, hi = 3;
+      for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2; if (field(m) < 0) lo = m; else hi = m; }
+      e.c = add(HC, e.gaze, lo - A.eye.r * A.eye.flat + (A.eye.protrude ?? 0.045));
+      const N = e.side > 0 ? 'N' : 'F';
+      prims[prims.findIndex((p) => p.name === 'eye' + N)] = eyePrim(N, e, A.eye);
+    }
   }
   const mouth = { ...ell('mouth', 'head', A.mouth.c, A.mouth.r, 0), bend: A.mouth.bend || 0, top: A.mouth.top || 1 };
   const pivots = BONES.map(() => [0, 0, 0]);
@@ -242,7 +267,9 @@ function makeShader(cfg, anat) {
     }
     if (name.startsWith('eye')) {
       const eye = eyes[name === 'eyeN' ? 0 : 1];
-      const dir = norm([x - eye.c[0], y - eye.c[1], z - eye.c[2]]);
+      let v0 = [x - eye.c[0], y - eye.c[1], z - eye.c[2]];
+      if (eye.flat !== 1) v0 = add(v0, eye.gaze, dot(v0, eye.gaze) * (1 / eye.flat - 1));
+      const dir = norm(v0);
       const cl = dot(dir, eye.look);
       // glossy bead eye: dark iris filling the visible cap, warmer toward the bottom, big catch-light
       const h1 = dot(dir, norm([eye.look[0] - 0.2, eye.look[1] + 0.55, eye.look[2] + 0.05 * eye.side]));
@@ -453,7 +480,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
           p: [0, 1, 2].map((q) => root.p[q] + dir[q] * len * u - (q === 1 ? cfg.fur.droop * len * u * u : 0) + (q === 2 ? curl * len * u * u : 0)),
           n: root.n, col: mix3(root.col, tip, u), kind: root.kind,
           boneA: root.boneA, boneB: root.boneB, w: root.w,
-          t: u, fleck: k === nd && rnd() < 0.03 ? 1 : 0, seed: seedS, size: D.fluffSize * (1.1 - 0.4 * u), alpha: 1 - 0.3 * u,
+          t: u, fleck: k === nd && rnd() < 0.03 ? 1 : 0, seed: seedS, size: D.fluffSize * (1.1 - 0.4 * u), alpha: root.kind === KIND.WHITE_FUR && cfg.fur.opaqueCream ? 1 : 1 - 0.3 * u,
         });
       }
       continue;
@@ -487,7 +514,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
       fur.push({
         p, n: norm([lean[0], 1, lean[2]]), col: mix3(CR.tone ? cfg.palette.fur[1] : cfg.palette.fur[2], tipCol, t), kind: KIND.FUR,
         boneA: B.head, boneB: B.crown, w: smoothstep(0, 0.6, t),
-        t, fleck: 0, seed: rnd(), size: D.fluffSize * (CR.size || 1.35) * (1 - 0.45 * t), alpha: 1 - 0.3 * t,
+        t, fleck: 0, seed: rnd(), size: D.fluffSize * (CR.size || 1.35) * (1 - (CR.taper ?? 0.45) * t), alpha: 1 - 0.3 * t,
       });
     }
   }
@@ -547,7 +574,7 @@ export function buildHamster(character = 'orange', { depthCloud = false, seed = 
   for (const pt of core) if (!pt.glow && pt.kind <= KIND.WHITE_FUR && rnd() < 0.025) pt.sparkle = 1;
   // cream dots a touch larger: less black between bright dots, so pale fur reads soft, not grainy
   // eyeFill (V3): eye dots overlap so the sclera and iris read as solid, glossy surfaces
-  const sizeOf = (pt) => (pt.name === 'brow' ? pt.r / D.dotScale : (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.EYE ? D.eyeFill || 1 : pt.kind === KIND.WHITE_FUR ? 1.08 : 1) * pt.r) * D.dotScale;
+  const sizeOf = (pt) => (pt.name === 'brow' ? pt.r / D.dotScale : (pt.glow ? 1.25 : pt.sparkle ? 1.35 : pt.kind === KIND.EYE ? D.eyeFill || 1 : pt.kind === KIND.WHITE_FUR ? D.creamFill || 1.08 : 1) * pt.r) * D.dotScale;
   const out = {
     id: cfg.id,
     core: pack(core, sizeOf, () => 0, (pt) => pt.glow || pt.sparkle || 0, null, () => 1),

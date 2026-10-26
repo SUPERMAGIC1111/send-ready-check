@@ -15,6 +15,7 @@
       #ui button { all: unset; cursor: pointer; padding: 6px 10px; border-radius: 999px; background: var(--chip); color: var(--dim); transition: background 0.2s, color 0.2s; }
       #ui button:hover, #ui button:focus-visible { color: var(--fg); outline: 1px solid rgba(255, 255, 255, 0.2); }
       #ui button[aria-pressed="true"] { background: var(--chip-on); color: var(--fg); }
+      #ui button[aria-disabled="true"] { opacity: 0.35; cursor: default; }
       #top { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; width: calc(100vw - 32px); pointer-events: none; }
       #picker { pointer-events: auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: calc(100vw - 32px); }
       #picker button { all: unset; cursor: pointer; padding: 6px 10px; border-radius: 999px; background: var(--chip); color: var(--dim); }
@@ -41,6 +42,8 @@
       <button id="run" title="Space">Run</button>
       <button id="pause" title="P">Pause</button>
       <button id="auto">Orbit</button>
+      <span class="sep"></span>
+      <button id="soft" title="Voxel hamster material: Solid or Soft translucent (M)">Solid</button>
       <span class="sep"></span>
       <button data-mode="dots" aria-pressed="true" title="A">Normal</button>
       <button data-mode="ascii" title="ASCII glyph render mode, EXPERIMENTAL (A)">ASCII (exp.)</button>

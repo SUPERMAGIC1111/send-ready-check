@@ -695,6 +695,39 @@ const smooth01 = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
  * behind the body) and a folded, lifted recovery; arms pump forward with a cartoon stretch.
  * contact = true (inside the orb): the arms reach up-forward and press the inner shell in turn.
  */
+/**
+ * Scurry gait (texture lab, Voxel V3): four short limbs in diagonal pairs. Each limb tip follows
+ * an explicit path relative to the body: during the stance it slides straight back along the
+ * floor (that is what drives the wheel), during the swing it lifts in a small arc and returns
+ * forward, so the front paws reach forward to touch down and the hind paws push back. The limb
+ * leans with its tip (a small rotation about the hip or shoulder) and is then translated so the
+ * tip lands exactly on the path; the body's bob and surge are subtracted, so a planted paw never
+ * leaves the floor or sinks into it.
+ *   SC: { step, lift, duty, surge, phases: { footN, footF, pawN, pawF } }  (phases in cycles)
+ */
+function scurryLimbs(cyc, run, SC, A, rot, bodyX, bodyY) {
+  for (const tip of A.tips) {
+    const pv = A.pivots[tip.bone], p0 = tip.p;
+    let u = (cyc + (SC.phases[tip.name] || 0)) % 1;
+    if (u < 0) u += 1;
+    let x, y;
+    if (u < SC.duty) {
+      x = SC.step * (0.5 - u / SC.duty);
+      y = 0;
+    } else {
+      const s = (u - SC.duty) / (1 - SC.duty);
+      x = SC.step * (smooth01(s) - 0.5);
+      y = SC.lift * Math.sin(Math.PI * s);
+    }
+    x *= run; y *= run;
+    const L = Math.hypot(p0[0] - pv[0], p0[1] - pv[1]);
+    const th = Math.atan2(x, L);
+    const c = Math.cos(th), sn = Math.sin(th), dx = p0[0] - pv[0], dy = p0[1] - pv[1];
+    const q = [pv[0] + c * dx - sn * dy, pv[1] + sn * dx + c * dy];
+    rot[tip.bone] = about(pv, R(0, 0, th), [p0[0] + x - bodyX - q[0], p0[1] + y - bodyY - q[1], 0]);
+  }
+}
+
 function poseV3(t, run, out, cfg, contact) {
   const M = cfg.run, A = anatomyOf(cfg), PV = A.pivots, an = cfg.anatomy;
   const TAU = Math.PI * 2;
@@ -704,6 +737,10 @@ function poseV3(t, run, out, cfg, contact) {
   const sq = run * M.squash * Math.cos(2 * ph - 0.6);
   const rot = [];
   rot[B.body] = about(PV[B.body], R(0, 0, run * (M.lean + M.pitch * Math.sin(2 * ph + 0.4))), [0, run * M.bounce * bounce + breathe, 0], [1 + sq * 0.5, 1 - sq, 1 + sq * 0.5]);
+  // scurry (texture lab): the body only bobs and surges a little, no lean or squash
+  const SC = M.scurry;
+  const bodyX = SC ? run * SC.surge * Math.sin(2 * ph + 0.9) : 0, bodyY = SC ? run * M.bounce * bounce + breathe : 0;
+  if (SC) rot[B.body] = about(PV[B.body], I4(), [bodyX, bodyY, 0]);
   // head: follow-through a beat behind the body, personality tilt/turn
   const expr = bump(t, M.expressionEvery, 1.2, 0.3);
   const tilt = M.tilt * Math.sin(t * M.tiltSpeed) + M.tilt * 0.6 * bump(t, M.tiltEvery, 1.6, 0.5);
@@ -713,10 +750,11 @@ function poseV3(t, run, out, cfg, contact) {
   const perk = M.earPerk * expr;
   rot[B.earN] = about(PV[B.earN], R(run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
   rot[B.earF] = about(PV[B.earF], R(-run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
+  if (SC) scurryLimbs(ph / TAU, run, SC, A, rot, bodyX, bodyY);
   // hind legs: alternate (half a stride apart)
   const legLen = Math.hypot(an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1]) + an.foot.r[1];
   const legAxis = norm([an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1], 0]);
-  for (const [bone, off] of [[B.legN, 0], [B.legF, Math.PI]]) {
+  if (!SC) for (const [bone, off] of [[B.legN, 0], [B.legF, Math.PI]]) {
     const sn = Math.sin(ph + off), cs = Math.cos(ph + off);
     const ang = run * (M.legBase + M.legAmp * sn); // + swings the foot forward, - pushes it back
     const rec = Math.max(0, cs); // forward recovery swing: fold and lift
@@ -730,7 +768,9 @@ function poseV3(t, run, out, cfg, contact) {
   // arms: opposite to the same-side leg
   const armAxis = norm([an.paw.c[0] - an.arm.a[0], an.paw.c[1] - an.arm.a[1], 0]);
   const G = contact && M.contact ? M.contact : M;
-  if (M.quad) {
+  if (SC) {
+    // scurry: all four limbs were posed by scurryLimbs()
+  } else if (M.quad) {
     // quad gait (texture lab): the front legs run on the ground like the hind legs, diagonal pairs
     // (near front with far hind), with the swing scaled so the paws move at the same ground speed
     // as the feet: no sliding between front and back
@@ -804,6 +844,9 @@ export function limbTips(t, run = 1, character = 'orange', contact = false, bone
  */
 export function runSpeed(character = 'orange', samples = 96) {
   const T = runPeriod(character);
+  // scurry: the stance is defined exactly (tip slides `step` along the floor in duty*T)
+  const SC = (typeof character === 'string' ? CHARACTERS[character] : character).run.scurry;
+  if (SC) return { speed: SC.step / (SC.duty * T), stride: SC.step, duty: SC.duty };
   const feet = new Map();
   for (let k = 0; k < samples; k++) {
     for (const { name, p } of limbTips((k / samples) * T, 1, character, false)) {

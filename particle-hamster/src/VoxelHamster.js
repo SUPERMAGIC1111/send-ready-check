@@ -14,7 +14,10 @@ const VERTEX = /* glsl */ `
   uniform float uVox;
   uniform float uAssemble;
   uniform float uTime;
+  uniform float uShell;      // SOFT outer layer: push the cube out along its surface normal (voxels)
+  uniform float uShellScale; // and enlarge it, so neighbouring shell cubes overlap (no gaps)
   attribute vec3 aCenter;
+  attribute vec3 aNormal;
   attribute vec3 aColor;
   attribute float aBoneA;
   attribute float aBoneB;
@@ -32,7 +35,8 @@ const VERTEX = /* glsl */ `
     vec3 c = mix((A * vec4(aCenter, 1.0)).xyz, (B * vec4(aCenter, 1.0)).xyz, aWeight);
     // cubes turn with their bone (blend of the two rotations), so they stay attached when limbs swing
     mat3 R = mat3(A) * (1.0 - aWeight) + mat3(B) * aWeight;
-    float s = uVox * (0.92 + 0.08 * uAssemble);
+    c += normalize(R * aNormal) * uShell * uVox;
+    float s = uVox * uShellScale * (0.92 + 0.08 * uAssemble);
     vec3 p = c + R * (position * s);
     vLocal = position;
     vNormal = normalize(normalMatrix * (R * normal));
@@ -45,6 +49,7 @@ const VERTEX = /* glsl */ `
 
 const FRAGMENT = /* glsl */ `
   uniform vec3 uLight;
+  uniform float uAlpha;
   varying vec3 vColor;
   varying vec3 vNormal;
   varying vec3 vLocal;
@@ -61,7 +66,13 @@ const FRAGMENT = /* glsl */ `
     if (vKind > 2.5 && vKind < 3.5) col = vFlag > 0.5 ? vec3(1.0) : vColor * (0.9 + 0.2 * diff);
     else if (vKind > 3.5) col = vColor * (0.85 + 0.2 * diff);
     else col = vColor * (0.58 + 0.55 * diff);
+  #ifdef SHELL
+    // soft outer layer: eyes, nose, mouth and pink skin stay crisp underneath (no shell over them)
+    if (vKind > 1.5) discard;
+    gl_FragColor = vec4(mix(vColor * (0.75 + 0.4 * diff), vec3(1.0), 0.12), uAlpha);
+  #else
     gl_FragColor = vec4(col * edge, 1.0);
+  #endif
   }
 `;
 
@@ -82,6 +93,9 @@ export class VoxelHamster extends THREE.Group {
       uAssemble: { value: 1 },
       uTime: { value: 0 },
       uLight: { value: new THREE.Vector3(...LIGHT) },
+      uShell: { value: 0 },
+      uShellScale: { value: 1 },
+      uAlpha: { value: 1 },
     };
     const box = new THREE.BoxGeometry(1, 1, 1);
     const g = new THREE.InstancedBufferGeometry();
@@ -91,6 +105,7 @@ export class VoxelHamster extends THREE.Group {
     const ia = (arr, k) => new THREE.InstancedBufferAttribute(arr, k);
     g.setAttribute('aCenter', ia(voxels.center, 3));
     g.setAttribute('aColor', ia(voxels.color, 3));
+    g.setAttribute('aNormal', ia(voxels.normal, 3));
     g.setAttribute('aBoneA', ia(voxels.boneA, 1));
     g.setAttribute('aBoneB', ia(voxels.boneB, 1));
     g.setAttribute('aWeight', ia(voxels.weight, 1));
@@ -102,7 +117,22 @@ export class VoxelHamster extends THREE.Group {
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 1;
-    this.add(this.mesh);
+    // SOFT TRANSLUCENT: the opaque cubes stay as the inner body; a second, translucent layer of the
+    // same cubes sits half a voxel further out. It writes depth, so only its nearest layer blends
+    // over the body (you never see through the hamster), and it is drawn after the body.
+    this.shellMaterial = new THREE.ShaderMaterial({
+      uniforms: { ...this.uniforms, uShell: { value: 0.5 }, uShellScale: { value: 1.25 }, uAlpha: { value: 0.42 } },
+      vertexShader: VERTEX,
+      fragmentShader: FRAGMENT,
+      defines: { SHELL: '' },
+      transparent: true,
+      depthWrite: true,
+    });
+    this.shell = new THREE.Mesh(g, this.shellMaterial);
+    this.shell.frustumCulled = false;
+    this.shell.renderOrder = 3;
+    this.shell.visible = false;
+    this.add(this.mesh, this.shell);
     this.particleCount = voxels.count;
     this.update(0, { run: 1 });
   }
@@ -112,6 +142,11 @@ export class VoxelHamster extends THREE.Group {
   setFocus() {}
   setSizeK() {}
   setSolid() {}
+
+  /** SOLID (false) or SOFT TRANSLUCENT (true) */
+  setSoft(on) {
+    this.shell.visible = !!on;
+  }
 
   update(t, { run = 1, assemble = 1 } = {}) {
     poseMatrices(t, run, this._boneData, this.character, this.contact);
@@ -131,6 +166,7 @@ export class VoxelHamster extends THREE.Group {
     this.mesh.geometry.dispose();
     this._box.dispose();
     this.material.dispose();
+    this.shellMaterial.dispose();
     this.removeFromParent();
   }
 }

@@ -26,6 +26,9 @@ if (params.has('view') && VIEWS[params.get('view')] !== undefined) {
 if (params.get('paused') === '1') { stage.paused = true; stage.intro.v = 1; }
 if (params.get('run') === '0') stage.setRunning(false);
 if (params.get('auto') === '0' || params.get('paused') === '1') stage.setAutoOrbit(false);
+// QA: show any hamster at a given world scale in the wheel (identical-scale comparisons)
+if (params.has('scale')) stage.lockScale = Number(params.get('scale'));
+if (params.get('material') === 'soft') stage.setSoft(true);
 const detachOrbit = stage.orbit.attach(canvas);
 
 function resize() {
@@ -48,7 +51,7 @@ for (const v of LAB_VARIANTS) {
 function describe() {
   const n = stage.hamster?.particleCount ?? 0;
   const unit = variant.render === 'voxel' ? 'voxels' : variant.render === 'mesh' ? 'triangles' : 'dots';
-  info.textContent = `${variant.label}${variant.note ? ` (${variant.note})` : ''} · ${n.toLocaleString('en')} ${unit}${stage.mode === 'ascii' ? ' · ASCII glyphs (EXPERIMENTAL)' : ''}`;
+  info.textContent = `${variant.label}${variant.note ? ` (${variant.note})` : ''} · ${n.toLocaleString('en')} ${unit}${softable() && stage.soft ? ' · soft translucent (EXPERIMENTAL)' : ''}${stage.mode === 'ascii' ? ' · ASCII glyphs (EXPERIMENTAL)' : ''}`;
   canvas.dataset.particles = String(stage.particleCount);
   canvas.dataset.variant = variant.id;
 }
@@ -57,6 +60,7 @@ function choose(v) {
   press('[data-variant]', (x) => x.dataset.variant === v.id);
   info.textContent = `${v.label} · building…`;
   stage.setVariant(v.character, v).then(() => { if (variant === v) describe(); });
+  sync();
   if (location.hash !== `#lab-${v.id}`) history.replaceState(null, '', `#lab-${v.id}`);
 }
 picker.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) choose(byId[b.dataset.variant]); });
@@ -65,11 +69,16 @@ press('[data-variant]', (x) => x.dataset.variant === variant.id);
 
 // ---- bottom controls
 const runBtn = document.getElementById('run'), pauseBtn = document.getElementById('pause'), autoBtn = document.getElementById('auto');
+const softBtn = document.getElementById('soft');
+const softable = () => variant.render === 'voxel' && !variant.brain;
 const sync = () => {
   runBtn.setAttribute('aria-pressed', String(stage.running));
   pauseBtn.setAttribute('aria-pressed', String(stage.paused));
   pauseBtn.textContent = stage.paused ? 'Play' : 'Pause';
   autoBtn.setAttribute('aria-pressed', String(stage.orbit.auto));
+  softBtn.textContent = stage.soft ? 'Soft' : 'Solid';
+  softBtn.setAttribute('aria-pressed', String(!!stage.soft));
+  softBtn.setAttribute('aria-disabled', String(!softable()));
 };
 const setMode = (m) => { stage.setMode(m); press('[data-mode]', (x) => x.dataset.mode === m); describe(); };
 document.getElementById('ui').addEventListener('click', (e) => {
@@ -83,6 +92,7 @@ document.getElementById('ui').addEventListener('click', (e) => {
   if (b === runBtn) stage.setRunning(!stage.running);
   if (b === pauseBtn) stage.paused = !stage.paused; // freezes the run clock, wheel and blink; orbit still works
   if (b === autoBtn) stage.setAutoOrbit(!stage.orbit.auto);
+  if (b === softBtn && softable()) { stage.setSoft(!stage.soft); describe(); }
   if (b.dataset.mode) setMode(b.dataset.mode);
   sync();
 });
@@ -91,6 +101,7 @@ sync();
 addEventListener('keydown', (e) => {
   if (e.key === ' ') { e.preventDefault(); runBtn.click(); }
   if (e.key === 'p' || e.key === 'P') pauseBtn.click();
+  if (e.key === 'm' || e.key === 'M') softBtn.click();
   if (e.key === 'a' || e.key === 'A') setMode(stage.mode === 'ascii' ? 'dots' : 'ascii');
   if (e.key === 'r' || e.key === 'R') stage.orbit.reset();
   if (e.key === 'ArrowLeft') stage.orbit.nudge(-1.2, 0);

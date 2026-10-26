@@ -227,4 +227,38 @@ potato.palette = lab.palette;
 // cycle; feet lift ~0.14, front paws ~0.09 (small, rapid steps)
 potato.run = sprint({ period: 0.24, quad: Math.PI / 2, lean: -0.02, legBase: -0.05, legAmp: 0.3, legFold: 0, legStretch: 0, legLift: 0, bounce: 0.05, armBase: 0.2, armAmp: 0.5, armStretch: 0.1 });
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, brain };
+// --- Voxel V3, "low scurry" (texture lab): lower, rounder and a little longer than V2, the belly
+// just above the running surface, thin short hind legs, front paws that come forward from under
+// the chest, and an explicit four-legged scurry (hamsterModel scurryLimbs). Locked to the
+// Micro-Voxel world scale in the wheel (wheelScale), so short legs do not enlarge it.
+const DROP3 = -0.22;
+const drop3 = (c) => [c[0], c[1] + DROP3, c[2]];
+const scurry = clone(lab);
+Object.assign(scurry, { id: 'voxelV3', name: 'Voxel V3' });
+Object.assign(scurry.anatomy, {
+  body: { c: [-0.38, -0.76, 0], r: [0.94, 0.7, 0.9] },
+  belly: { c: [-0.08, -0.98, 0], r: [0.86, 0.48, 0.9] },
+  head: { ...lab.anatomy.head, c: drop3(lab.anatomy.head.c) },
+  cheek: { ...lab.anatomy.cheek, c: drop3(lab.anatomy.cheek.c) },
+  muzzle: { ...lab.anatomy.muzzle, c: drop3(lab.anatomy.muzzle.c) },
+  nose: { ...lab.anatomy.nose, c: drop3(lab.anatomy.nose.c) },
+  mouth: { ...lab.anatomy.mouth, c: drop3(lab.anatomy.mouth.c) },
+  tooth: { ...lab.anatomy.tooth, c: drop3(lab.anatomy.tooth.c) },
+  ear: { ...lab.anatomy.ear, c: drop3(lab.anatomy.ear.c) },
+  tail: { ...lab.anatomy.tail, c: [-1.28, -0.74, 0] },
+  // hind legs: hips inside the body, thin, only the lower leg and the paw show
+  leg: { a: [-0.56, -1.12, 0.5], b: [-0.5, -1.4, 0.52], r1: 0.15, r2: 0.085 },
+  foot: { c: [-0.38, -1.485, 0.52], r: [0.2, 0.07, 0.12] },
+  // front legs: start under the chest and reach forward-down, not hanging arms
+  arm: { a: [0.36, -1.1, 0.38], b: [0.58, -1.38, 0.34], r1: 0.1, r2: 0.075 },
+  paw: { c: [0.68, -1.49, 0.32], r: [0.14, 0.065, 0.11] },
+});
+scurry.palette = lab.palette;
+scurry.wheelScale = 0.6903; // Micro-Voxel's world scale in the wheel (measured), not auto-fit
+scurry.run = sprint({
+  quad: Math.PI / 2, period: 0.18, lean: 0, pitch: 0, squash: 0, bounce: 0.035, headLag: 0.04, cheekJiggle: 0.05,
+  // diagonal pairs (near-front with far-hind), half a cycle apart; stance slides straight back
+  scurry: { step: 0.34, lift: 0.075, duty: 0.5, surge: 0.025, phases: { pawN: 0, footF: 0, pawF: 0.5, footN: 0.5 } },
+});
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, brain };

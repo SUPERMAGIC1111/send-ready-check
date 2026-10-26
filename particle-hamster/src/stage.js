@@ -107,12 +107,14 @@ export class HamsterStage {
       this.hamster?.dispose();
       this.character = character;
       this.variant = variant;
+      this.layers = layers;
       const render = variant?.render || 'dots';
       this.hamster =
         render === 'voxel' ? new VoxelHamster(layers.voxel, character)
         : render === 'mesh' ? new BrainMesh(layers.field)
         : new ParticleHamster(layers, character, { sculpt: render === 'sculpt' });
       this.hamster.setSolid(this.mode === 'ascii');
+      this.hamster.setSoft?.(this.soft && !variant?.brain); // material toggle: voxel hamsters only
       if (this.wheelMode) {
         if (variant?.brain) this._placeBrain();
         else this._placeInWheel(layers);
@@ -170,7 +172,10 @@ export class HamsterStage {
       }
     }
     const H = maxY - floorY;
-    const k = Math.min(1, (0.56 * 2 * Rin) / H);
+    // a fixed world scale (character wheelScale, or lockScale for QA comparisons) wins over the
+    // auto-fit, so a hamster with short legs is not enlarged to fill the same height
+    const fixed = this.lockScale ?? CHARACTERS[this.character].wheelScale;
+    const k = fixed ?? Math.min(1, (0.56 * 2 * Rin) / H);
     this.wheelScale = k;
     this.rig.scale.setScalar(k);
     this.rig.position.set(-k * (minX + maxX) / 2, -Rin + 0.02 - k * floorY, 0);
@@ -193,6 +198,12 @@ export class HamsterStage {
   setMode(mode) {
     this.mode = mode;
     this.hamster?.setSolid(mode === 'ascii');
+  }
+
+  /** voxel hamsters: SOLID (opaque cubes) or SOFT (opaque core + translucent outer voxel layer) */
+  setSoft(on) {
+    this.soft = on;
+    this.hamster?.setSoft?.(on && !this.variant?.brain);
   }
 
   setAutoOrbit(on) {

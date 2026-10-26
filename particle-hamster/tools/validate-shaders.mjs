@@ -36,6 +36,7 @@ const jobs = [
   ['orb.frag', FPRE + ORB_SHADERS.FRAGMENT],
   ['voxel.vert', VPRE + VOXEL_SHADERS.VERTEX],
   ['voxel.frag', FPRE + VOXEL_SHADERS.FRAGMENT],
+  ['voxel-shell.frag', FPRE + '#define SHELL\n' + VOXEL_SHADERS.FRAGMENT],
 ];
 let failed = 0;
 for (const [name, src] of jobs) {

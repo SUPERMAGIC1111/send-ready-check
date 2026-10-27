@@ -59,14 +59,41 @@ export function noise3(x, y, z) {
 }
 
 // ---------------------------------------------------------------- rig
-export const BONES = ['body', 'head', 'earN', 'earF', 'armN', 'armF', 'legN', 'legF', 'tail', 'cheekN', 'cheekF', 'crown', 'eyeN', 'eyeF', 'browN', 'browF'];
+// shin / fore (V15): lower leg and forearm bones, used only by characters with jointed limbs
+// (anatomy.leg.knee); appended so every earlier bone index is unchanged
+export const BONES = ['body', 'head', 'earN', 'earF', 'armN', 'armF', 'legN', 'legF', 'tail', 'cheekN', 'cheekF', 'crown', 'eyeN', 'eyeF', 'browN', 'browF', 'shinN', 'shinF', 'foreN', 'foreF'];
 const B = Object.fromEntries(BONES.map((n, i) => [n, i]));
-const PARENT = BONES.map((n) => B[{ head: 'body', earN: 'head', earF: 'head', cheekN: 'head', cheekF: 'head', crown: 'head', eyeN: 'head', eyeF: 'head', browN: 'head', browF: 'head' }[n] ?? 'body']);
+const PARENT = BONES.map((n) => B[{ head: 'body', earN: 'head', earF: 'head', cheekN: 'head', cheekF: 'head', crown: 'head', eyeN: 'head', eyeF: 'head', browN: 'head', browF: 'head', shinN: 'legN', shinF: 'legF', foreN: 'armN', foreF: 'armF' }[n] ?? 'body']);
 
 // material kinds -> fur behaviour and shading
 export const KIND = { FUR: 0, WHITE_FUR: 1, SKIN: 2, EYE: 3, FEATURE: 4, MOUTH: 5 };
 
 // ---------------------------------------------------------------- anatomy (SDF primitives)
+/**
+ * Limb primitives. One rigid capsule per limb (all characters up to V14), or, with leg.knee /
+ * arm.elbow (V15), a jointed limb: a rounded upper segment on the leg/arm bone and a slimmer lower
+ * segment plus the paw on the shin/fore bone. Names keep the 'leg'/'arm' prefix for colouring.
+ */
+function limbPrims(A, s, N) {
+  const m = (p) => mirror(p, s);
+  if (!A.leg.knee) {
+    return [
+      cap('arm' + N, 'arm' + N, m(A.arm.a), m(A.arm.b), A.arm.r1, A.arm.r2, 0.1),
+      ell('paw' + N, 'arm' + N, m(A.paw.c), A.paw.r, 0.035),
+      cap('leg' + N, 'leg' + N, m(A.leg.a), m(A.leg.b), A.leg.r1, A.leg.r2, 0.1),
+      ell('foot' + N, 'leg' + N, m(A.foot.c), A.foot.r, 0.04),
+    ];
+  }
+  return [
+    cap('armU' + N, 'arm' + N, m(A.arm.a), m(A.arm.elbow), A.arm.r1, A.arm.rj, 0.1),
+    cap('armL' + N, 'fore' + N, m(A.arm.elbow), m(A.arm.b), A.arm.rj, A.arm.r2, 0.03),
+    ell('paw' + N, 'fore' + N, m(A.paw.c), A.paw.r, 0.03),
+    cap('legU' + N, 'leg' + N, m(A.leg.a), m(A.leg.knee), A.leg.r1, A.leg.rj, 0.1),
+    cap('legL' + N, 'shin' + N, m(A.leg.knee), m(A.leg.b), A.leg.rj, A.leg.r2, 0.03),
+    ell('foot' + N, 'shin' + N, m(A.foot.c), A.foot.r, 0.03),
+  ];
+}
+
 // 'e' = oriented ellipsoid, 'c' = tapered capsule. k = smooth-union radius with the rest.
 function ell(name, bone, c, r, k, basis) {
   const [u, v, w] = basis || [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -113,10 +140,7 @@ function makeAnatomy(cfg) {
       ell('cheek' + N, 'cheek' + N, mirror(A.cheek.c, s), A.cheek.r, A.cheek.k),
       eyePrim(N, eyes[s > 0 ? 0 : 1], A.eye),
       ell('ear' + N, 'ear' + N, mirror(A.ear.c, s), A.ear.r, 0.05, earBasis(s, A.ear.facing)),
-      cap('arm' + N, 'arm' + N, mirror(A.arm.a, s), mirror(A.arm.b, s), A.arm.r1, A.arm.r2, 0.1),
-      ell('paw' + N, 'arm' + N, mirror(A.paw.c, s), A.paw.r, 0.035),
-      cap('leg' + N, 'leg' + N, mirror(A.leg.a, s), mirror(A.leg.b, s), A.leg.r1, A.leg.r2, 0.1),
-      ell('foot' + N, 'leg' + N, mirror(A.foot.c, s), A.foot.r, 0.04),
+      ...limbPrims(A, s, N),
       ell('tooth' + N, 'head', mirror(A.tooth.c, s), A.tooth.r, 0.004)
     );
   }
@@ -149,6 +173,10 @@ function makeAnatomy(cfg) {
     pivots[B['ear' + N]] = add(mirror(A.ear.c, s), [0, -A.ear.r[1] * 0.8, -0.05 * s]);
     pivots[B['arm' + N]] = mirror(A.arm.a, s);
     pivots[B['leg' + N]] = mirror(A.leg.a, s);
+    if (A.leg.knee) {
+      pivots[B['shin' + N]] = mirror(A.leg.knee, s);
+      pivots[B['fore' + N]] = mirror(A.arm.elbow, s);
+    }
     pivots[B['cheek' + N]] = mirror(A.cheek.c, s);
     pivots[B['eye' + N]] = eyes[s > 0 ? 0 : 1].c;
     pivots[B['brow' + N]] = add(eyes[s > 0 ? 0 : 1].c, [0, A.eye.r * 1.4, 0]);
@@ -165,8 +193,8 @@ function makeAnatomy(cfg) {
     const armDir = norm([A.paw.c[0] - A.arm.a[0], A.paw.c[1] - A.arm.a[1], 0]);
     return [
       // quad gait: the front paw is a foot, so its tip is the sole
-      { name: 'paw' + N, bone: B['arm' + N], p: cfg.run.quad ? add(mirror(A.paw.c, s), [A.paw.r[0] * 0.3, -A.paw.r[1], 0]) : add(mirror(A.paw.c, s), armDir, A.paw.r[0] * 0.9) },
-      { name: 'foot' + N, bone: B['leg' + N], p: add(mirror(A.foot.c, s), [A.foot.r[0] * 0.3, -A.foot.r[1], 0]) },
+      { name: 'paw' + N, bone: B[(A.leg.knee ? 'fore' : 'arm') + N], p: cfg.run.quad ? add(mirror(A.paw.c, s), [A.paw.r[0] * 0.3, -A.paw.r[1], 0]) : add(mirror(A.paw.c, s), armDir, A.paw.r[0] * 0.9) },
+      { name: 'foot' + N, bone: B[(A.leg.knee ? 'shin' : 'leg') + N], p: add(mirror(A.foot.c, s), [A.foot.r[0] * 0.3, -A.foot.r[1], 0]) },
     ];
   });
   return { HC, eyes, prims, mouth, pivots, tips, bbox: { min: lo.map((v) => v - 0.05), max: hi.map((v) => v + 0.05) } };
@@ -740,6 +768,57 @@ function scurryLimbs(cyc, run, SC, A, rot, { pb, bodyX, bodyY, lean = 0, sx = 1,
   }
 }
 
+/**
+ * Jointed-limb run (V15). Each paw follows its own path relative to the running surface (the same
+ * stance/swing path and curved rim as scurryLimbs, with a higher, rounder swing), then each limb is
+ * solved as two bones (two-bone IK in the side plane): hip -> knee -> sole for the hind legs (knee
+ * bends forward), shoulder -> elbow -> paw for the front legs (elbow bends back). So the stance paw
+ * stays planted while the knee and elbow flex and extend, and the swing paw folds up under the body.
+ */
+function jointedLimbs(cyc, run, SC, A, rot, { pb, bodyX, bodyY, lean = 0, sx = 1, sy = 1, an }) {
+  const cl = Math.cos(lean), sl = Math.sin(lean);
+  for (const tip of A.tips) {
+    const hind = tip.name.startsWith('foot'), side = tip.name.endsWith('N') ? 1 : -1, N = side > 0 ? 'N' : 'F';
+    const L = hind ? an.leg : an.arm;
+    const upper = B[(hind ? 'leg' : 'arm') + N], lower = B[(hind ? 'shin' : 'fore') + N];
+    const h = L.a, kn0 = hind ? L.knee : L.elbow, p0 = tip.p;
+    let u = (cyc + (SC.phases[tip.name] || 0)) % 1;
+    if (u < 0) u += 1;
+    let x, y;
+    if (u < SC.duty) {
+      x = SC.step * (0.5 - u / SC.duty);
+      y = 0;
+    } else {
+      const sw = (u - SC.duty) / (1 - SC.duty);
+      x = SC.step * (smooth01(sw) - 0.5);
+      y = SC.lift * Math.sin(Math.PI * sw) * (hind ? 1 : 0.85);
+    }
+    x = (x + (SC.reach?.[hind ? 'foot' : 'paw'] || 0)) * run; y *= run;
+    if (SC.floorR) {
+      const d = p0[0] + x - SC.floorC;
+      y += SC.floorR - Math.sqrt(Math.max(0, SC.floorR * SC.floorR - d * d));
+    }
+    // world target -> body-local
+    const dx0 = p0[0] + x - pb[0] - bodyX, dy0 = p0[1] + y - pb[1] - bodyY;
+    const t = [pb[0] + (cl * dx0 + sl * dy0) / sx, pb[1] + (-sl * dx0 + cl * dy0) / sy];
+    // two-bone IK in the side plane
+    const L1 = Math.hypot(kn0[0] - h[0], kn0[1] - h[1]), L2 = Math.hypot(p0[0] - kn0[0], p0[1] - kn0[1]);
+    const vx = t[0] - h[0], vy = t[1] - h[1];
+    const d = clamp(Math.hypot(vx, vy), Math.abs(L1 - L2) + 1e-4, L1 + L2 - 1e-4);
+    const base = Math.atan2(vy, vx);
+    const bend = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
+    // knee forward (hind) / elbow back (front): the joint sits on that side of the hip-paw line
+    const th1 = base + (hind ? bend : -bend);
+    const k = [h[0] + L1 * Math.cos(th1), h[1] + L1 * Math.sin(th1)];
+    const th2 = Math.atan2(t[1] - k[1], t[0] - k[0]);
+    const r1 = Math.atan2(kn0[1] - h[1], kn0[0] - h[0]), r2 = Math.atan2(p0[1] - kn0[1], p0[0] - kn0[0]);
+    const d1 = th1 - r1, d2 = th2 - r2 - d1;
+    const hz = [h[0], h[1], h[2] * side], kz = [kn0[0], kn0[1], kn0[2] * side];
+    rot[upper] = about(hz, R(0, 0, d1));
+    rot[lower] = about(kz, R(0, 0, d2));
+  }
+}
+
 function poseV3(t, run, out, cfg, contact) {
   const M = cfg.run, A = anatomyOf(cfg), PV = A.pivots, an = cfg.anatomy;
   const TAU = Math.PI * 2;
@@ -753,7 +832,7 @@ function poseV3(t, run, out, cfg, contact) {
   const SC = M.scurry;
   const bodyX = SC ? run * SC.surge * Math.sin(2 * ph + 0.9) : 0, bodyY = SC ? run * M.bounce * bounce + breathe : 0;
   // V10: a lean and a squash-and-stretch per variant (scurry); the squash keeps the body's volume
-  if (SC) rot[B.body] = about(PV[B.body], R(0, 0, run * (SC.lean || 0)), [bodyX, bodyY, 0], SC.squash ? [1 + sq * 0.5, 1 - sq, 1 + sq * 0.5] : undefined);
+  if (SC) rot[B.body] = about(PV[B.body], R(0, 0, run * ((SC.lean || 0) + (SC.pitch || 0) * Math.sin(ph + (SC.pitchPhase || 0)))), [bodyX, bodyY, 0], SC.squash ? [1 + sq * 0.5, 1 - sq, 1 + sq * 0.5] : undefined);
   // head: follow-through a beat behind the body, personality tilt/turn
   const expr = bump(t, M.expressionEvery, 1.2, 0.3);
   const tilt = M.tilt * Math.sin(t * M.tiltSpeed) + M.tilt * 0.6 * bump(t, M.tiltEvery, 1.6, 0.5);
@@ -763,8 +842,9 @@ function poseV3(t, run, out, cfg, contact) {
   const perk = M.earPerk * expr;
   rot[B.earN] = about(PV[B.earN], R(run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
   rot[B.earF] = about(PV[B.earF], R(-run * 0.14 * earLag, 0, run * (M.earFlop + M.earBounce * earLag) - perk));
-  const lean = SC ? run * (SC.lean || 0) : 0, sqs = SC?.squash ? [1 + sq * 0.5, 1 - sq] : [1, 1];
-  if (SC) scurryLimbs(ph / TAU, run, SC, A, rot, { pb: PV[B.body], bodyX, bodyY, lean, sx: sqs[0], sy: sqs[1] });
+  // V15 bound: the body pitches through the stride (nose up at push-off, down at the landing)
+  const lean = SC ? run * ((SC.lean || 0) + (SC.pitch || 0) * Math.sin(ph + (SC.pitchPhase || 0))) : 0, sqs = SC?.squash ? [1 + sq * 0.5, 1 - sq] : [1, 1];
+  if (SC) (cfg.anatomy.leg.knee ? jointedLimbs : scurryLimbs)(ph / TAU, run, SC, A, rot, { pb: PV[B.body], bodyX, bodyY, lean, sx: sqs[0], sy: sqs[1], an: cfg.anatomy });
   // hind legs: alternate (half a stride apart)
   const legLen = Math.hypot(an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1]) + an.foot.r[1];
   const legAxis = norm([an.leg.b[0] - an.leg.a[0], an.leg.b[1] - an.leg.a[1], 0]);
@@ -826,6 +906,7 @@ function poseV3(t, run, out, cfg, contact) {
   rot[B.browN] = about(PV[B.browN], R(0, 0, 0), [0, lift, 0]);
   rot[B.browF] = about(PV[B.browF], R(0, 0, 0), [0, lift, 0]);
 
+  for (let i = 0; i < BONES.length; i++) rot[i] ??= I4();
   const world = [];
   for (let i = 0; i < BONES.length; i++) {
     world[i] = i === 0 ? rot[0] : mul(world[PARENT[i]], rot[i]);
@@ -939,6 +1020,7 @@ export function poseMatrices(t, run = 1, out = new Float32Array(BONES.length * 1
   for (const bone of [B.eyeN, B.eyeF]) rot[bone] = about(PV[bone], R(0, glance, M.glance * 0.4 * Math.sin(t * 0.6)), [0, 0, 0], [eyeGrow, eyeScale * eyeGrow, eyeGrow]);
   rot[B.browN] = rot[B.browF] = I4();
 
+  for (let i = 0; i < BONES.length; i++) rot[i] ??= I4();
   const world = [];
   for (let i = 0; i < BONES.length; i++) {
     world[i] = i === 0 ? rot[0] : mul(world[PARENT[i]], rot[i]);

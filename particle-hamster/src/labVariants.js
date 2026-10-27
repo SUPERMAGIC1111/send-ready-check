@@ -95,4 +95,6 @@ export const LAB_VARIANTS = [
   { id: 'v14_08', label: 'V14 08', note: 'candidate', character: 'happyV14_08', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 0.8, gloss: 0.45, rim: 0.7, iri: 0.5, plush: 1, shell: { offset: 0.4, scale: 0.7, alpha: 1, face: false } } },
   { id: 'v14_09', label: 'V14 09', note: 'candidate', character: 'happyV14_09', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 1.0, gloss: 0.25 } },
   { id: 'v14_10', label: 'V14 10', note: 'candidate', character: 'happyV14_10', render: 'voxel', build: { ...happyBuild, voxel: 0.033 }, style: { round: 0.85, gloss: 0.22, rim: 0.2 } },
+  // --- V15 anatomy master (single candidate; V8-V14 above are unchanged)
+  { id: 'v15', label: 'V15 Anatomy Master', note: 'experimental', character: 'happyV15', render: 'voxel', build: { ...happyBuild, voxel: 0.033 }, style: { round: 0.85, gloss: 0.22, rim: 0.2 } },
 ];

@@ -546,4 +546,40 @@ const V14 = {
 };
 const v14 = Object.fromEntries(Object.entries(V14).map(([n, [name, P]]) => ['happyV14_' + n, hamsterV14(n, name, P)]));
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, ...v13, ...v14, brain };
+// --- V15 anatomy master (from V14 #10 Joe's Redemption): a compact hamster with jointed legs.
+// Body ~28% shorter with a defined round rump and chest, belly raised well clear of the rim, a
+// rounder cranium, and four two-segment legs (hind: hip -> forward knee -> ankle -> foot; front:
+// shoulder -> backward elbow -> wrist -> paw) driven by two-bone IK in a bounding run: the hind
+// pair pushes off together, a short airborne recovery, the front pair reaches and catches, the
+// body gathers and stretches and pitches through the stride. Same uphill wheel position as V14.
+const v15 = clone(v14.happyV14_10);
+Object.assign(v15, { id: 'happyV15', name: 'V15 Anatomy Master' });
+{
+  const A = v15.anatomy, bx = -0.2, by = -0.66, rx = 0.68, ry = 0.5, rz = 0.62;
+  // head: same face, moved onto the shorter body and given a rounder cranium
+  const dH = [0.62 - A.head.c[0], -0.5 - A.head.c[1], 0];
+  const mv = (part) => ({ ...A[part], c: [A[part].c[0] + dH[0], A[part].c[1] + dH[1], A[part].c[2]] });
+  Object.assign(A, {
+    head: { ...mv('head'), r: [A.head.r[0] * 1.02, A.head.r[1] * 1.12, A.head.r[2] * 1.04] },
+    cheek: mv('cheek'), muzzle: mv('muzzle'), nose: mv('nose'), mouth: mv('mouth'), tooth: mv('tooth'), ear: mv('ear'),
+    body: { c: [bx, by, 0], r: [rx, ry, rz] },
+    belly: { c: [bx - 0.42, by + 0.02, 0], r: [0.44, 0.46, 0.5] }, // round rump
+    tail: { ...A.tail, c: [bx - rx - 0.02, by + 0.08, 0] },
+    // hind: hip under the rump, knee forward, ankle back, long foot forward (rodent zig-zag)
+    leg: { a: [-0.52, -0.98, 0.4], knee: [-0.28, -1.16, 0.46], b: [-0.58, -1.4, 0.48], r1: 0.16, rj: 0.085, r2: 0.065 },
+    foot: { c: [-0.5, -1.505, 0.49], r: [0.16, 0.05, 0.085] },
+    // front: shoulder under the chest, elbow back, wrist forward, round paw
+    arm: { a: [0.3, -0.98, 0.36], elbow: [0.1, -1.2, 0.4], b: [0.38, -1.4, 0.42], r1: 0.13, rj: 0.075, r2: 0.06 },
+    paw: { c: [0.42, -1.505, 0.43], r: [0.13, 0.05, 0.08] },
+  });
+}
+v15.wheelCenterX = -0.05;
+v15.wheelAngle = 0.15; // ~9 degrees up the curve; with a ~6 degree lean, ~15 degrees uphill
+v15.run = {
+  ...v15.run, period: 0.2, bounce: 0.035, squash: 0.04, cheekJiggle: 0.12, earBounce: 0.3, headLag: 0.08,
+  // bound: hinds together (slightly staggered), fronts half a stride later; short flight phases
+  scurry: { ...v15.run.scurry, floorC: -0.05, step: 0.44, lift: 0.16, duty: 0.4, surge: 0.06, squash: true, lean: 0.1, pitch: 0.035, pitchPhase: 0.4,
+    reach: { paw: 0.08, foot: -0.08 }, phases: { footN: 0, footF: 0.07, pawN: 0.5, pawF: 0.57 } },
+};
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, ...v13, ...v14, happyV15: v15, brain };

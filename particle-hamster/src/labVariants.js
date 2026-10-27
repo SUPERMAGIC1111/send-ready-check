@@ -84,4 +84,15 @@ export const LAB_VARIANTS = [
   { id: 'v13_08', label: 'V13 08', note: 'silhouette', character: 'happyV13_08', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   { id: 'v13_09', label: 'V13 09', note: 'silhouette', character: 'happyV13_09', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
   { id: 'v13_10', label: 'V13 10', note: 'silhouette', character: 'happyV13_10', render: 'voxel', build: happyBuild, style: { round: 1.0, gloss: 0.2 } },
+  // --- V14: ten pixel hamsters running up the inner curve (V8-V13 above are unchanged)
+  { id: 'v14_01', label: 'V14 01', note: 'candidate', character: 'happyV14_01', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 1.0, gloss: 0.2 } },
+  { id: 'v14_02', label: 'V14 02', note: 'candidate', character: 'happyV14_02', render: 'voxel', build: { ...happyBuild, voxel: 0.034 }, style: { round: 1.0, gloss: 0.25 } },
+  { id: 'v14_03', label: 'V14 03', note: 'candidate', character: 'happyV14_03', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 0.8, gloss: 0.4, iri: 0.6, rim: 0.3 } },
+  { id: 'v14_04', label: 'V14 04', note: 'candidate', character: 'happyV14_04', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 1.0, gloss: 0.35, rim: 0.35 } },
+  { id: 'v14_05', label: 'V14 05', note: 'candidate', character: 'happyV14_05', render: 'voxel', build: { ...happyBuild, voxel: 0.03 }, style: { round: 1.0, gloss: 0.15 } },
+  { id: 'v14_06', label: 'V14 06', note: 'candidate', character: 'happyV14_06', render: 'voxel', build: { ...happyBuild, voxel: 0.06 }, style: { round: 0, gloss: 0 } },
+  { id: 'v14_07', label: 'V14 07', note: 'candidate', character: 'happyV14_07', render: 'voxel', build: { ...happyBuild, voxel: 0.026 }, style: { round: 0.6, gloss: 0.12 } },
+  { id: 'v14_08', label: 'V14 08', note: 'candidate', character: 'happyV14_08', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 0.8, gloss: 0.45, rim: 0.7, iri: 0.5, plush: 1, shell: { offset: 0.4, scale: 0.7, alpha: 1, face: false } } },
+  { id: 'v14_09', label: 'V14 09', note: 'candidate', character: 'happyV14_09', render: 'voxel', build: { ...happyBuild, voxel: 0.036 }, style: { round: 1.0, gloss: 0.25 } },
+  { id: 'v14_10', label: 'V14 10', note: 'candidate', character: 'happyV14_10', render: 'voxel', build: { ...happyBuild, voxel: 0.033 }, style: { round: 0.85, gloss: 0.22, rim: 0.2 } },
 ];

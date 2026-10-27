@@ -141,6 +141,7 @@ export class HamsterStage {
     const k = (0.48 * 2 * Rin) / W;
     this.wheelScale = k;
     this.rig.scale.setScalar(k);
+    this.rig.rotation.z = 0;
     this.rig.position.set(0, 0.02, 0);
     this.hamster.setSizeK(k);
     this.wheelOmega = 0;
@@ -181,7 +182,16 @@ export class HamsterStage {
     const k = fixed ?? Math.min(1, (0.56 * 2 * Rin) / H);
     this.wheelScale = k;
     this.rig.scale.setScalar(k);
-    this.rig.position.set(-k * (cfg.wheelCenterX ?? (minX + maxX) / 2), -Rin + 0.02 - k * floorY, 0);
+    const cx = cfg.wheelCenterX ?? (minX + maxX) / 2;
+    // V14 wheelAngle: the hamster runs up the rising inner curve. The rig is turned by that angle and
+    // placed so its contact point (cx, floorY) lands on the rim there; in the rig's own frame the rim
+    // is still the same circle (scurry floorR / floorC), so paws keep landing on the real surface.
+    const phi = cfg.wheelAngle || 0, Re = Rin - 0.02;
+    this.rig.rotation.z = phi;
+    if (phi) {
+      const c = Math.cos(phi), s = Math.sin(phi), lx = k * cx, ly = k * floorY;
+      this.rig.position.set(Re * s - (c * lx - s * ly), -Re * c - (s * lx + c * ly), 0);
+    } else this.rig.position.set(-k * cx, -Rin + 0.02 - k * floorY, 0);
     this.hamster.setSizeK(k);
     // ground speed of the run, scaled to this rig, in scene units per second; omega = V / R
     // omega = V / R; on the curved floor the paws touch the rim at Rin - 0.02, so use that radius
@@ -263,10 +273,21 @@ export class HamsterStage {
         const touch = [];
         for (const { name, p } of this.hamster.tips()) {
           if (!name.startsWith('foot')) continue;
-          const gap = this.rig.position.y + this.wheelScale * p[1] + Rin; // distance above the rim floor
+          let gap;
+          if (this.rig.rotation.z) {
+            // tilted rig (V14): the paw in wheel space, its distance from the rim, its rim point
+            this.rig.updateMatrix();
+            v.set(p[0], p[1], p[2]).applyMatrix4(this.rig.matrix);
+            const d = Math.hypot(v.x, v.y);
+            gap = Rin - d;
+            v.set((v.x / d) * Rin, (v.y / d) * Rin, 0);
+          } else {
+            gap = this.rig.position.y + this.wheelScale * p[1] + Rin; // distance above the rim floor
+            v.set(this.rig.position.x + this.wheelScale * p[0], -Rin, 0);
+          }
           if (gap > 0.14) continue;
           const s = (1 - smooth(gap / 0.14)) * 0.35 * this.runBlend.v;
-          v.set(this.rig.position.x + this.wheelScale * p[0], -Rin, 0).applyMatrix4(back);
+          v.applyMatrix4(back);
           touch.push({ p: [v.x, v.y, v.z], s });
         }
         this.orb.setContacts(touch);

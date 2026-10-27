@@ -485,4 +485,65 @@ const V13 = {
 };
 const v13 = Object.fromEntries(Object.entries(V13).map(([n, [name, P]]) => ['happyV13_' + n, hamsterV13(n, name, P)]));
 
-export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, ...v13, brain };
+// --- V14: ten pixel hamsters running UP the inner curve of the wheel (Guni's positioning guide).
+// Shared mechanics: contact point ~5 degrees up the rising side (the body centre ends up ~15% of
+// the radius forward), body leaning a further ~11 degrees nose-up (about 16 degrees uphill in
+// all), paws landing on the real rim. Anatomy from V13 "Joe's Redemption" with cheeks ~40% smaller, less white lower face, a
+// slightly higher belly and short slim legs that show. Variants differ in palette, eyes, ears and
+// proportions; voxel size and voxel shading are set per lab variant.
+const PAL = {
+  classic: {},
+  pink: { fur: [[0.93, 0.5, 0.62], [0.97, 0.58, 0.7], [1.0, 0.66, 0.76], [1.0, 0.75, 0.83]], furAccent: [0.95, 0.56, 0.68], furHi: [1.0, 0.84, 0.9], furTip: [1.0, 0.88, 0.92], cream: [1.0, 0.95, 0.96], ivory: [1.0, 0.98, 0.98], earInner: [1.0, 0.45, 0.6] },
+  purple: { ...rocket.palette },
+  golden: { fur: [[0.82, 0.55, 0.12], [0.9, 0.65, 0.2], [0.97, 0.74, 0.28], [1.0, 0.82, 0.4]], furAccent: [0.9, 0.64, 0.2], furHi: [1.0, 0.9, 0.55], furTip: [1.0, 0.92, 0.6], cream: [1.0, 0.96, 0.84] },
+  peach: { fur: [[0.97, 0.58, 0.42], [1.0, 0.66, 0.5], [1.0, 0.73, 0.58], [1.0, 0.8, 0.66]], furAccent: [1.0, 0.64, 0.48], furHi: [1.0, 0.86, 0.75], furTip: [1.0, 0.9, 0.8], cream: [1.0, 0.96, 0.92], ivory: [1.0, 0.98, 0.95] },
+  retro: { fur: [[0.85, 0.36, 0.06], [0.95, 0.46, 0.1], [1.0, 0.55, 0.14], [1.0, 0.64, 0.22]] },
+  chestnut: { fur: [[0.5, 0.25, 0.1], [0.6, 0.32, 0.14], [0.68, 0.4, 0.2], [0.76, 0.48, 0.27]], furAccent: [0.6, 0.33, 0.15], furHi: [0.86, 0.66, 0.46], furTip: [0.9, 0.74, 0.56], cream: [1.0, 0.98, 0.96], ivory: [1.0, 1.0, 0.98] },
+  sunny: { fur: [[0.98, 0.52, 0.08], [1.0, 0.62, 0.14], [1.0, 0.7, 0.2], [1.0, 0.78, 0.3]], furAccent: [1.0, 0.6, 0.14], furHi: [1.0, 0.88, 0.5] },
+  cinnamon: { fur: [[0.76, 0.36, 0.12], [0.86, 0.46, 0.17], [0.94, 0.55, 0.23], [1.0, 0.64, 0.32]], furAccent: [0.86, 0.46, 0.18], furHi: [1.0, 0.8, 0.52], cream: [1.0, 0.95, 0.86] },
+};
+function hamsterV14(n, name, P) {
+  const A9 = happy9.anatomy, H9 = A9.head.c, k = P.k ?? 0.6, N = P.head ?? [0.72, -0.72, 0];
+  const re = (c) => [N[0] + (c[0] - H9[0]) * k, N[1] + (c[1] - H9[1]) * k, c[2] * k];
+  const mv = (part, rk = k) => ({ ...A9[part], c: re(A9[part].c), r: A9[part].r.map((v) => v * rk) });
+  const [bx, rx, ry, rz] = P.body ?? [-0.45, 0.98, 0.46, 0.64];
+  const by = -1.34 + ry; // belly ~0.2 above the paw soles: the short slim legs show
+  const pawX = bx + 0.55 * rx, footX = bx - 0.5 * rx, z = 0.55 * rz, mid = (pawX + footX) / 2;
+  const hr = P.hr ?? [0.74, 0.6, 0.68];
+  const h = clone(v11B);
+  Object.assign(h, { id: 'happyV14_' + n, name, wheelCenterX: mid, wheelAngle: 0.09 });
+  Object.assign(h.palette, PAL[P.pal ?? 'classic']);
+  Object.assign(h.anatomy, {
+    head: { ...A9.head, c: N, r: [A9.head.r[0] * hr[0], A9.head.r[1] * hr[1], A9.head.r[2] * hr[2]], k: 0.5 },
+    cheek: mv('cheek', P.cheek ?? 0.43), muzzle: mv('muzzle', 0.85), nose: mv('nose', 0.95), mouth: mv('mouth', 0.85), tooth: mv('tooth', 0.85),
+    ear: mv('ear', P.ear ?? 0.85),
+    eye: { ...A9.eye, dist: A9.eye.dist * k, r: P.eyeR ?? 0.2 },
+    body: { c: [bx, by, 0], r: [rx, ry, rz] },
+    belly: { c: [bx - 0.55 * rx, by + 0.02, 0], r: [0.42 * rx / 0.98, ry * 0.9, rz * 0.8] }, // full round rump
+    tail: { ...A9.tail, c: [bx - rx + 0.08, by + 0.06, 0], r: [0.16, 0.15, 0.15] },
+    leg: { a: [footX, by - 0.15, z], b: [footX - 0.03, -1.4, z + 0.04], r1: 0.12, r2: 0.07 },
+    foot: { c: [footX, -1.505, z + 0.04], r: [0.14, 0.05, 0.09] },
+    arm: { a: [pawX, by - 0.15, z - 0.03], b: [pawX + 0.03, -1.4, z + 0.01], r1: 0.1, r2: 0.06 },
+    paw: { c: [pawX + 0.04, -1.505, z + 0.01], r: [0.12, 0.05, 0.08] },
+  });
+  // less white lower face: cream only on the cheek fronts, a narrow blaze and the chest
+  h.regions = { ...happy9.regions, cheekCream: 0.05, blaze: [0.06, 0.18, 0.32], belly: [-0.9, 0.3, 0.2, 0.25] };
+  h.run = { ...h.run, expression: P.expr ?? h.run.expression,
+    scurry: { ...h.run.scurry, floorC: mid, lean: 0.2, step: 0.42, lift: 0.1, duty: 0.5, surge: 0.04, squash: true, reach: { paw: 0.06, foot: -0.08 } } };
+  return h;
+}
+const V14 = {
+  '01': ['01 Classic Golden', {}],
+  '02': ['02 Baby Pink', { pal: 'pink', eyeR: 0.24, k: 0.64, cheek: 0.48, body: [-0.4, 0.9, 0.48, 0.64] }],
+  '03': ['03 Purple Magic', { pal: 'purple', eyeR: 0.21, ear: 0.95 }],
+  '04': ['04 Golden Sunshine', { pal: 'golden' }],
+  '05': ['05 Pastel Peach', { pal: 'peach', eyeR: 0.21, cheek: 0.46 }],
+  '06': ['06 Retro Pixel', { pal: 'retro', body: [-0.45, 1.0, 0.48, 0.66] }],
+  '07': ['07 Micro-Voxel Premium', { pal: 'chestnut', eyeR: 0.19, k: 0.58, hr: [0.72, 0.58, 0.66] }],
+  '08': ['08 Particle Magic', { pal: 'golden', eyeR: 0.21 }],
+  '09': ['09 Happy Cartoon', { pal: 'sunny', eyeR: 0.26, ear: 1.1, k: 0.72, hr: [0.82, 0.66, 0.76], cheek: 0.5, expr: 'surprise', body: [-0.38, 0.88, 0.47, 0.64] }],
+  '10': ["10 Joe's Redemption", { pal: 'cinnamon', eyeR: 0.23, k: 0.66, hr: [0.78, 0.63, 0.72], cheek: 0.47, ear: 0.95, body: [-0.42, 0.94, 0.47, 0.64] }],
+};
+const v14 = Object.fromEntries(Object.entries(V14).map(([n, [name, P]]) => ['happyV14_' + n, hamsterV14(n, name, P)]));
+
+export const CHARACTERS_V4 = { orangeV4: orange, cocoaV4: cocoa, peachyV4: peachy, orangeLab: lab, purpleRocket: rocket, voxelV2: potato, voxelV3: scurry, voxelBigHead: big, happyHamster: happy, happyHamsterV9: happy9, happyV10A: v10A, happyV10B: v10B, happyV10C: v10C, happyV11A: v11A, happyV11B: v11B, happyV11C: v11C, happyV12: v12, ...v13, ...v14, brain };
